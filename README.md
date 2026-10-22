@@ -6,7 +6,7 @@ Parametric, seeded and open for remixing. Each folder is a self-contained
 algorithm with its own README, parameters and demo.
 
 ## Algorithms
-Coming soon.
+- [Ethereum Dynamic Brand](./ethereum-dynamic-brand) — live generative identity system driven by real-time Ethereum data.
 
 ## Author
 Mel Manrique, Brand Designer & Creative Technologist.

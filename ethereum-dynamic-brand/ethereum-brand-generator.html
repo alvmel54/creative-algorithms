@@ -1,0 +1,2838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ethereum Brand Generator — Live Generative Identity System</title>
+<meta name="description" content="A live generative brand tool that turns real-time Ethereum blockchain data — price, TVL, validators, gas, dApp count — into a precise, white-on-black geometric identity system.">
+<meta property="og:title" content="Ethereum Brand Generator — Live Generative Identity System">
+<meta property="og:description" content="A live generative brand tool driven by real-time Ethereum blockchain data.">
+<meta property="og:image" content="./preview.png">
+<meta property="og:type" content="website">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D0D0D;
+  --panel:#141414;
+  --border:#2A2A2A;
+  --text:#FFFFFF;
+  --text-secondary:#666666;
+  --label:#444444;
+  --tile-bg:#0D0D0D;
+  --cell-bg:#1A1A1A;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Space Grotesk", sans-serif;
+  overflow:hidden;
+}
+.app{
+  display:flex;
+  flex-direction:row-reverse;
+  width:100vw;
+  height:100vh;
+  overflow:hidden;
+}
+
+/* ---------- CONTROL PANEL (right side, 35% width) ---------- */
+.panel{
+  flex:0 0 35%;
+  max-width:35%;
+  min-width:320px;
+  background:var(--panel);
+  border-left:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  overflow:hidden;
+}
+.tabs{
+  display:flex;
+  gap:4px;
+  padding:16px;
+  border-bottom:1px solid var(--border);
+}
+.tab-btn{
+  flex:1;
+  padding:8px 0;
+  border-radius:999px;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--text-secondary);
+  font-family:inherit;
+  font-size:12px;
+  letter-spacing:0.03em;
+  cursor:pointer;
+  transition:background .15s,color .15s;
+}
+.tab-btn.active{
+  background:#FFFFFF;
+  color:#000000;
+  font-weight:600;
+}
+.panel-scroll{
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+}
+.panel-scroll::-webkit-scrollbar{width:6px;}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.panel-scroll::-webkit-scrollbar-track{background:transparent;}
+
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+.section{
+  margin-bottom:24px;
+}
+.section-label{
+  font-size:11px;
+  letter-spacing:0.1em;
+  color:var(--label);
+  text-transform:uppercase;
+  border-top:1px solid var(--border);
+  padding-top:12px;
+  margin-bottom:12px;
+}
+.section:first-child .section-label{border-top:none;padding-top:0;}
+
+.control{
+  margin-bottom:8px;
+}
+.control-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:6px;
+}
+.control label{
+  font-size:12px;
+  color:var(--text);
+}
+.control .value{
+  font-size:11px;
+  color:var(--text-secondary);
+  font-variant-numeric:tabular-nums;
+}
+
+select, input[type="text"]{
+  width:100%;
+  background:#0D0D0D;
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:8px 10px;
+  font-family:inherit;
+  font-size:12px;
+  outline:none;
+  appearance:none;
+  -webkit-appearance:none;
+  background-image: linear-gradient(45deg, transparent 50%, #666 50%), linear-gradient(135deg, #666 50%, transparent 50%);
+  background-position: calc(100% - 16px) calc(50% - 2px), calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat:no-repeat;
+}
+select:focus, input[type="text"]:focus{ border-color:#555; }
+
+input[type="range"]{
+  -webkit-appearance:none;
+  width:100%;
+  height:2px;
+  background:var(--border);
+  border-radius:2px;
+  outline:none;
+  margin:4px 0;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#FFFFFF;
+  cursor:pointer;
+  border:none;
+}
+input[type="range"]::-moz-range-thumb{
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#FFFFFF;
+  cursor:pointer;
+  border:none;
+}
+
+.radio-group{
+  display:flex;
+  gap:8px;
+}
+.radio-option{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:8px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  font-size:12px;
+  color:var(--text-secondary);
+  cursor:pointer;
+  transition:all .15s;
+}
+.radio-option.selected{
+  border-color:#FFFFFF;
+  color:#FFFFFF;
+}
+.radio-option input{display:none;}
+
+.checkbox-group{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.checkbox-option{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:12px;
+  color:var(--text);
+  cursor:pointer;
+  padding:6px 0;
+}
+.checkbox-option input{
+  width:14px;height:14px;
+  accent-color:#FFFFFF;
+}
+
+.color-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+input[type="color"]{
+  -webkit-appearance:none;
+  width:32px;height:32px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:transparent;
+  cursor:pointer;
+  padding:0;
+}
+input[type="color"]::-webkit-color-swatch-wrapper{padding:2px;}
+input[type="color"]::-webkit-color-swatch{border-radius:4px;border:none;}
+.color-row .swatch-label{
+  font-size:11px;
+  color:var(--text-secondary);
+  font-family:monospace;
+}
+.color-row.transparent-bg input[type="color"]{
+  background-image:
+    linear-gradient(45deg,#333 25%,transparent 25%),
+    linear-gradient(-45deg,#333 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#333 75%),
+    linear-gradient(-45deg,transparent 75%,#333 75%);
+  background-size:8px 8px;
+  background-position:0 0,0 4px,4px -4px,-4px 0;
+}
+
+.pulse-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:#3CFF6E;
+  display:inline-block;
+  animation:pulse 1.4s infinite;
+}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(60,255,110,.5);}
+  70%{box-shadow:0 0 0 6px rgba(60,255,110,0);}
+  100%{box-shadow:0 0 0 0 rgba(60,255,110,0);}
+}
+
+/* ---------- CANVAS LIVE INDICATOR (top-right of the canvas area) ---------- */
+.canvas-live-dot{
+  position:absolute;
+  top:16px;
+  right:16px;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#3CFF6E;
+  animation:pulse 1.4s infinite;
+  display:none;
+  z-index:20;
+}
+.canvas-live-dot.active{display:block;}
+
+/* ---------- DATA-DRIVEN SLIDER GLOW ---------- */
+@keyframes sliderGlow{
+  0%{box-shadow:0 0 0 3px rgba(80,150,255,.55);}
+  100%{box-shadow:0 0 0 3px rgba(80,150,255,0);}
+}
+.control.glow input[type="range"]{
+  border-radius:2px;
+  animation:sliderGlow 2s ease-out;
+}
+
+.panel-footer{
+  border-top:1px solid var(--border);
+  padding:16px;
+  position:sticky;
+  bottom:0;
+  background:var(--panel);
+  flex-shrink:0;
+}
+.btn-row{
+  display:flex;
+  gap:8px;
+}
+.btn-secondary{
+  flex:1;
+  padding:10px;
+  background:transparent;
+  color:#FFFFFF;
+  border:1px solid var(--border);
+  border-radius:8px;
+  font-family:inherit;
+  font-size:12px;
+  cursor:pointer;
+  transition:border-color .15s;
+}
+.btn-secondary:hover{border-color:#666;}
+
+/* ---------- EXPORT MENU (dropdown, sibling of the Download button) ---------- */
+.download-wrap{
+  position:relative;
+  flex:1;
+  display:flex;
+}
+.download-wrap .btn-secondary{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+}
+.export-menu{
+  position:absolute;
+  bottom:calc(100% + 6px);
+  left:0;
+  right:0;
+  background:#1A1A1A;
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  display:none;
+  flex-direction:column;
+  z-index:50;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+}
+.export-menu.open{display:flex;}
+.export-menu button{
+  height:36px;
+  background:transparent;
+  border:none;
+  color:#FFFFFF;
+  font-family:inherit;
+  font-size:13px;
+  text-align:left;
+  padding:0 14px;
+  cursor:pointer;
+}
+.export-menu button:hover{background:#2A2A2A;}
+.export-menu button + button{border-top:1px solid var(--border);}
+
+/* ---------- SEED (collapsible section inside panel-scroll) ---------- */
+.seed-line{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:12px 0 2px 0;
+  border-top:1px solid var(--border);
+  font-size:11px;
+  color:var(--text-secondary);
+}
+.seed-line-code{
+  font-family:monospace;
+  color:#FFFFFF;
+  letter-spacing:0.05em;
+}
+.seed-copy-icon{
+  background:transparent;
+  border:none;
+  color:var(--text-secondary);
+  cursor:pointer;
+  padding:2px 4px;
+  font-size:13px;
+  line-height:1;
+}
+.seed-copy-icon:hover{color:#FFFFFF;}
+.seed-more-toggle{
+  margin-left:auto;
+  background:transparent;
+  border:none;
+  color:var(--text-secondary);
+  font-size:10px;
+  cursor:pointer;
+  text-decoration:underline;
+  padding:0;
+}
+.seed-more-toggle:hover{color:#FFFFFF;}
+.seed-more-body{
+  display:none;
+  margin:8px 0 4px 0;
+  flex-direction:column;
+  gap:8px;
+}
+.seed-more-body.open{display:flex;}
+.seed-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.seed-btn{
+  padding:8px 12px;
+  background:transparent;
+  border:1px solid var(--border);
+  color:#FFFFFF;
+  border-radius:6px;
+  font-family:inherit;
+  font-size:11px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.seed-btn:hover{border-color:#666;}
+.seed-load-row{
+  display:flex;
+  gap:8px;
+}
+.seed-load-row input{
+  flex:1;
+  background:#0D0D0D;
+  border:1px solid var(--border);
+  color:#FFFFFF;
+  border-radius:6px;
+  padding:8px 10px;
+  font-family:monospace;
+  font-size:11px;
+  outline:none;
+}
+
+/* ---------- LIVE DATA PANEL ---------- */
+.live-panel{
+  margin:16px 16px 0 16px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:0 16px;
+}
+.live-panel-head{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  background:transparent;
+  border:none;
+  color:inherit;
+  font-family:inherit;
+  cursor:pointer;
+  padding:12px 0;
+  text-align:left;
+}
+.live-panel-title{
+  font-size:11px;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  color:var(--label);
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.live-status-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#555;
+  flex-shrink:0;
+}
+.live-status-dot.active{
+  background:#3CFF6E;
+  animation:pulse 1.4s infinite;
+}
+.live-head-right{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+.live-badge{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  font-size:10px;
+  letter-spacing:0.08em;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  color:var(--text-secondary);
+}
+.live-badge.active{
+  color:#3CFF6E;
+  border-color:rgba(60,255,110,.4);
+}
+.live-chevron{
+  display:inline-block;
+  font-size:9px;
+  color:var(--text-secondary);
+  transition:transform .2s ease;
+}
+.live-panel.expanded .live-chevron{ transform:rotate(90deg); }
+.live-panel-body{
+  max-height:0;
+  overflow:hidden;
+  transition:max-height .2s ease;
+  padding-top:2px;
+}
+.live-panel.expanded .live-panel-body{
+  max-height:220px;
+  overflow-y:auto;
+  padding-bottom:14px;
+}
+.live-metric-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:5px 0;
+  gap:8px;
+}
+.live-metric-label{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:11px;
+  letter-spacing:0.05em;
+  color:var(--text-secondary);
+  text-transform:uppercase;
+}
+.live-source-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#555;
+  flex-shrink:0;
+}
+.live-source-dot.live{background:#3CFF6E;}
+.live-metric-value{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:14px;
+  font-weight:700;
+  color:#FFFFFF;
+  font-variant-numeric:tabular-nums;
+}
+.live-change{
+  font-size:11px;
+}
+.live-change.up{color:#3CFF6E;}
+.live-change.down{color:#FF5C5C;}
+.live-updated{
+  font-size:10px;
+  color:var(--text-secondary);
+  margin-top:8px;
+}
+.live-fallback{
+  font-size:11px;
+  color:#F5C518;
+  margin-top:8px;
+}
+.live-refresh-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:10px;
+}
+.live-refresh-btn{
+  padding:6px 10px;
+  background:transparent;
+  border:1px solid var(--border);
+  color:#FFFFFF;
+  border-radius:6px;
+  font-family:inherit;
+  font-size:11px;
+  cursor:pointer;
+}
+.live-refresh-btn:hover{border-color:#666;}
+.live-countdown{
+  font-size:10px;
+  color:var(--text-secondary);
+}
+.skeleton{
+  display:inline-block;
+  height:12px;
+  width:60px;
+  border-radius:3px;
+  background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 37%,#1a1a1a 63%);
+  background-size:400% 100%;
+  animation:skeletonShine 1.4s ease infinite;
+}
+@keyframes skeletonShine{
+  0%{background-position:100% 50%;}
+  100%{background-position:0 50%;}
+}
+
+/* ---------- RIGHT CANVAS AREA ---------- */
+.stage{
+  flex:1;
+  min-width:0;
+  height:100vh;
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  background:#000000;
+}
+.bg-checkerboard{
+  background-image:
+    linear-gradient(45deg,#1c1c1c 25%,transparent 25%),
+    linear-gradient(-45deg,#1c1c1c 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#1c1c1c 75%),
+    linear-gradient(-45deg,transparent 75%,#1c1c1c 75%);
+  background-size:24px 24px;
+  background-position:0 0,0 12px,12px -12px,-12px 0;
+  background-color:#050505;
+}
+.bg-black{ background:#000000; }
+.bg-white{ background:#FFFFFF; }
+.stage-canvas-wrap{
+  position:relative;
+  display:none;
+}
+.stage-canvas-wrap.active{display:block;}
+#assetCanvas, #iconsCanvas{
+  display:block;
+}
+.stage-hint{
+  position:absolute;
+  top:20px;
+  left:20px;
+  font-size:11px;
+  color:#555;
+  letter-spacing:0.05em;
+  text-transform:uppercase;
+}
+
+/* composition */
+#compositionWrap{
+  flex:1;
+  min-width:0;
+  height:100vh;
+  padding:40px;
+  overflow:auto;
+  display:none;
+  background:#000000;
+  position:relative;
+}
+#compositionWrap.active{display:block;}
+.mosaic{
+  display:grid;
+  grid-template-columns:repeat(6, 1fr);
+  grid-auto-rows:80px;
+  gap:12px;
+  max-width:1100px;
+  margin:0 auto;
+}
+.pill{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1.5px solid #FFFFFF;
+  color:#FFFFFF;
+  background:transparent;
+  white-space:nowrap;
+  font-weight:500;
+}
+.pill-wide{
+  border-radius:999px;
+  padding:14px 32px;
+  font-size:15px;
+}
+.pill-small{
+  border-radius:999px;
+  padding:16px 20px;
+  font-size:13px;
+  min-width:80px;
+}
+.mosaic-tile{
+  background:var(--tile-bg);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  position:relative;
+}
+.mosaic-tile canvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+.mosaic-asset{
+  background:#000000;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  position:relative;
+}
+.mosaic-asset canvas{width:100%;height:100%;display:block;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT PANEL -->
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="asset">Asset</button>
+      <button class="tab-btn" data-tab="icons">Icons</button>
+      <button class="tab-btn" data-tab="composition">Composition</button>
+    </div>
+
+    <div class="live-panel" id="livePanel">
+      <button class="live-panel-head" id="livePanelToggle" type="button">
+        <span class="live-panel-title">
+          <span class="live-status-dot" id="liveStatusDot"></span>
+          <span id="livePanelLabel">Live Ethereum Data</span>
+        </span>
+        <span class="live-head-right">
+          <span class="live-badge" id="liveBadge">LIVE</span>
+          <span class="live-chevron" id="liveChevron">▶</span>
+        </span>
+      </button>
+      <div class="live-panel-body" id="livePanelBody">
+        <div class="live-metric-row">
+          <span class="live-metric-label"><span class="live-source-dot" data-dot="price"></span>ETH Price</span>
+          <span class="live-metric-value" data-metric="price"><span class="skeleton"></span></span>
+        </div>
+        <div class="live-metric-row">
+          <span class="live-metric-label"><span class="live-source-dot" data-dot="tvl"></span>TVL</span>
+          <span class="live-metric-value" data-metric="tvl"><span class="skeleton"></span></span>
+        </div>
+        <div class="live-metric-row">
+          <span class="live-metric-label"><span class="live-source-dot" data-dot="validators"></span>Validators</span>
+          <span class="live-metric-value" data-metric="validators"><span class="skeleton"></span></span>
+        </div>
+        <div class="live-metric-row">
+          <span class="live-metric-label"><span class="live-source-dot" data-dot="gas"></span>Gas</span>
+          <span class="live-metric-value" data-metric="gas"><span class="skeleton"></span></span>
+        </div>
+        <div class="live-metric-row">
+          <span class="live-metric-label"><span class="live-source-dot" data-dot="dapps"></span>dApps</span>
+          <span class="live-metric-value" data-metric="dapps"><span class="skeleton"></span></span>
+        </div>
+        <div class="live-updated" id="liveUpdated">Last updated: —</div>
+        <div class="live-fallback" id="liveFallback" style="display:none;">Using simulated data</div>
+        <div class="live-refresh-row">
+          <button class="live-refresh-btn" id="btnRefreshData">↻ Refresh</button>
+          <span class="live-countdown" id="liveCountdown"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-scroll">
+
+      <!-- ============ SHARED: DATA SOURCE (applies regardless of active tab) ============ -->
+      <div class="section">
+        <div class="section-label">Data Source</div>
+        <div class="control">
+          <div class="control-row"><label>Type of data</label></div>
+          <select data-bind="dataType">
+            <option value="dapps">Number of dApps</option>
+            <option value="staking">Total Staking</option>
+            <option value="tvl">TVL</option>
+            <option value="gas">Gas Price</option>
+            <option value="price">ETH Price</option>
+            <option value="mix">Mix</option>
+          </select>
+        </div>
+        <div class="control">
+          <div class="control-row"><label>Real-time tracking</label></div>
+          <div class="radio-group" data-radio="realtime">
+            <label class="radio-option" data-value="yes"><input type="radio">Yes</label>
+            <label class="radio-option selected" data-value="no"><input type="radio">No</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ ASSET TAB ============ -->
+      <div class="tab-content active" id="tab-asset">
+        <div class="section">
+          <div class="section-label">Background</div>
+          <div class="control">
+            <label>Background shape</label>
+            <select data-bind="asset.bgShape">
+              <option value="ethereum">Ethereum</option>
+              <option value="circle">Circle</option>
+              <option value="square">Square</option>
+              <option value="hexagon">Hexagon</option>
+            </select>
+          </div>
+          <div class="control">
+            <label>Background colour</label>
+            <div class="color-row transparent-bg">
+              <input type="color" data-bind="asset.bgColor" value="#000000">
+              <span class="swatch-label" data-swatch="asset.bgColor">Transparent</span>
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Preview on</label></div>
+            <div class="radio-group" data-radio="asset.previewBg">
+              <label class="radio-option selected" data-value="black"><input type="radio">Black</label>
+              <label class="radio-option" data-value="white"><input type="radio">White</label>
+              <label class="radio-option" data-value="transparent"><input type="radio">Transparent</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">Geometry</div>
+          <div class="control">
+            <label>Geometric shape</label>
+            <select data-bind="asset.shape">
+              <option value="dots">Dots</option>
+              <option value="lines">Lines</option>
+              <option value="squares">Squares</option>
+              <option value="circles">Circles</option>
+              <option value="triangles">Triangles</option>
+              <option value="cross">Cross</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+          <div class="control">
+            <label>Shape color</label>
+            <div class="color-row">
+              <input type="color" data-bind="asset.shapeColor" value="#FFFFFF">
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Size</label><span class="value" data-val="asset.size"></span></div>
+            <input type="range" min="1" max="20" step="1" data-bind="asset.size">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Amount</label><span class="value" data-val="asset.amount"></span></div>
+            <input type="range" min="10" max="500" step="1" data-bind="asset.amount">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Spacing</label><span class="value" data-val="asset.spacing"></span></div>
+            <input type="range" min="0" max="50" step="1" data-bind="asset.spacing">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Rotation</label><span class="value" data-val="asset.rotation"></span></div>
+            <input type="range" min="0" max="360" step="1" data-bind="asset.rotation">
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">Physics</div>
+          <div class="control">
+            <label>Animation</label>
+            <select data-bind="asset.animation">
+              <option value="none">None</option>
+              <option value="fluid">Fluid</option>
+              <option value="pulse">Pulse</option>
+              <option value="orbit">Orbit</option>
+              <option value="drift">Drift</option>
+            </select>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Speed</label><span class="value" data-val="asset.speed"></span></div>
+            <input type="range" min="0" max="2" step="0.05" data-bind="asset.speed">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Flow</label><span class="value" data-val="asset.flow"></span></div>
+            <input type="range" min="0" max="2" step="0.05" data-bind="asset.flow">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Variation</label><span class="value" data-val="asset.variation"></span></div>
+            <input type="range" min="0" max="360" step="1" data-bind="asset.variation">
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ ICONS TAB ============ -->
+      <div class="tab-content" id="tab-icons">
+        <div class="section">
+          <div class="section-label">Grid</div>
+          <div class="control">
+            <label>Grid layout</label>
+            <select data-bind="icons.layout">
+              <option value="square">Square</option>
+              <option value="horizontal">Horizontal</option>
+              <option value="vertical">Vertical</option>
+            </select>
+          </div>
+          <div class="control">
+            <label>Background colour</label>
+            <div class="color-row transparent-bg">
+              <input type="color" data-bind="icons.bgColor" value="#000000">
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Preview on</label></div>
+            <div class="radio-group" data-radio="icons.previewBg">
+              <label class="radio-option selected" data-value="black"><input type="radio">Black</label>
+              <label class="radio-option" data-value="white"><input type="radio">White</label>
+              <label class="radio-option" data-value="transparent"><input type="radio">Transparent</label>
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Columns</label><span class="value" data-val="icons.cols"></span></div>
+            <input type="range" min="1" max="6" step="1" data-bind="icons.cols">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Rows</label><span class="value" data-val="icons.rows"></span></div>
+            <input type="range" min="1" max="6" step="1" data-bind="icons.rows">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Center elements</label></div>
+            <div class="radio-group" data-radio="icons.center">
+              <label class="radio-option selected" data-value="yes"><input type="radio">Yes</label>
+              <label class="radio-option" data-value="no"><input type="radio">No</label>
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Uniform proportions</label></div>
+            <div class="radio-group" data-radio="icons.uniform">
+              <label class="radio-option" data-value="yes"><input type="radio">Yes</label>
+              <label class="radio-option selected" data-value="no"><input type="radio">No</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">Icon Style</div>
+          <div class="control">
+            <label>Icon shape</label>
+            <select data-bind="icons.shape">
+              <option value="mixed">Mixed</option>
+              <option value="square">Square</option>
+              <option value="circle">Circle</option>
+              <option value="star">Star</option>
+              <option value="diamond">Diamond</option>
+              <option value="cross">Cross</option>
+              <option value="triangle">Triangle</option>
+            </select>
+          </div>
+          <div class="control">
+            <label>Icon style</label>
+            <select data-bind="icons.style">
+              <option value="outline">Outline</option>
+              <option value="filled">Filled</option>
+              <option value="nested">Nested</option>
+              <option value="fragmented">Fragmented</option>
+            </select>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Line Thickness</label><span class="value" data-val="icons.thickness"></span></div>
+            <input type="range" min="1" max="5" step="1" data-bind="icons.thickness">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Amount</label><span class="value" data-val="icons.amount"></span></div>
+            <input type="range" min="1" max="10" step="1" data-bind="icons.amount">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Spacing</label><span class="value" data-val="icons.spacing"></span></div>
+            <input type="range" min="1" max="20" step="1" data-bind="icons.spacing">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Rotation</label><span class="value" data-val="icons.rotation"></span></div>
+            <input type="range" min="0" max="360" step="1" data-bind="icons.rotation">
+          </div>
+          <div class="control">
+            <label>Icon inner color</label>
+            <div class="color-row"><input type="color" data-bind="icons.innerColor" value="#FFFFFF"></div>
+          </div>
+          <div class="control">
+            <label>Icon outer color</label>
+            <div class="color-row"><input type="color" data-bind="icons.outerColor" value="#FFFFFF"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ COMPOSITION TAB ============ -->
+      <div class="tab-content" id="tab-composition">
+        <div class="section">
+          <div class="section-label">Grid</div>
+          <div class="control">
+            <label>Grid layout</label>
+            <select data-bind="comp.layout">
+              <option value="square">Square</option>
+              <option value="masonry">Masonry</option>
+              <option value="asymmetric">Asymmetric</option>
+            </select>
+          </div>
+          <div class="control">
+            <label>Background colour</label>
+            <div class="color-row transparent-bg">
+              <input type="color" data-bind="comp.bgColor" value="#000000">
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Preview on</label></div>
+            <div class="radio-group" data-radio="comp.previewBg">
+              <label class="radio-option selected" data-value="black"><input type="radio">Black</label>
+              <label class="radio-option" data-value="white"><input type="radio">White</label>
+              <label class="radio-option" data-value="transparent"><input type="radio">Transparent</label>
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Columns</label><span class="value" data-val="comp.cols"></span></div>
+            <input type="range" min="1" max="6" step="1" data-bind="comp.cols">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Rows</label><span class="value" data-val="comp.rows"></span></div>
+            <input type="range" min="1" max="10" step="1" data-bind="comp.rows">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Columns overlapping</label></div>
+            <div class="radio-group" data-radio="comp.colOverlap">
+              <label class="radio-option selected" data-value="yes"><input type="radio">Yes</label>
+              <label class="radio-option" data-value="no"><input type="radio">No</label>
+            </div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Rows overlapping</label></div>
+            <div class="radio-group" data-radio="comp.rowOverlap">
+              <label class="radio-option selected" data-value="yes"><input type="radio">Yes</label>
+              <label class="radio-option" data-value="no"><input type="radio">No</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">Elements</div>
+          <div class="control">
+            <div class="checkbox-group" data-checkbox="comp.elements">
+              <label class="checkbox-option"><input type="checkbox" data-value="realtime">Real-time data</label>
+              <label class="checkbox-option"><input type="checkbox" data-value="words" checked>Words</label>
+              <label class="checkbox-option"><input type="checkbox" data-value="icons" checked>Icons</label>
+              <label class="checkbox-option"><input type="checkbox" data-value="images">Images</label>
+            </div>
+          </div>
+          <div class="control">
+            <label>Elements style</label>
+            <select data-bind="comp.elStyle">
+              <option value="outline">Outline</option>
+              <option value="filled">Filled</option>
+            </select>
+          </div>
+          <div class="control">
+            <label>Elements color</label>
+            <div class="color-row"><input type="color" data-bind="comp.elColor" value="#FFFFFF"></div>
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Amount</label><span class="value" data-val="comp.amount"></span></div>
+            <input type="range" min="1" max="50" step="1" data-bind="comp.amount">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Max. Amount</label><span class="value" data-val="comp.maxAmount"></span></div>
+            <input type="range" min="1" max="50" step="1" data-bind="comp.maxAmount">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Spacing</label><span class="value" data-val="comp.spacing"></span></div>
+            <input type="range" min="1" max="20" step="1" data-bind="comp.spacing">
+          </div>
+          <div class="control">
+            <div class="control-row"><label>Rotation</label><span class="value" data-val="comp.rotation"></span></div>
+            <input type="range" min="0" max="360" step="1" data-bind="comp.rotation">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-footer">
+      <div class="seed-line">
+        <span>Seed:</span>
+        <span class="seed-line-code" id="seedDisplay">ETH-XXXXXXXX</span>
+        <button class="seed-copy-icon" id="btnCopySeed" title="Copy seed">⎘</button>
+        <button class="seed-more-toggle" id="seedMoreToggle" type="button">more</button>
+      </div>
+      <div class="seed-more-body" id="seedMoreBody">
+        <div class="seed-row">
+          <button class="seed-btn" id="btnCopySeedLink">Copy link</button>
+        </div>
+        <div class="seed-load-row">
+          <input type="text" id="seedInput" placeholder="Paste seed to load...">
+          <button class="seed-btn" id="btnLoadSeed">Load</button>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" id="btnRandomize">Randomize</button>
+        <button class="btn-secondary" id="btnReset">Reset</button>
+        <div class="download-wrap">
+          <button class="btn-secondary" id="btnDownload">Download ▾</button>
+          <div class="export-menu" id="exportMenu">
+            <button data-export="png1">PNG 1x</button>
+            <button data-export="png2">PNG 2x</button>
+            <button data-export="png4">PNG 4x</button>
+            <button data-export="svg">SVG</button>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS AREA (65% width, hero) -->
+  <div class="stage">
+    <div class="stage-hint">Ethereum Brand Generator</div>
+    <span class="canvas-live-dot" id="canvasLiveDotStage"></span>
+    <div class="stage-canvas-wrap active" id="wrap-asset">
+      <canvas id="assetCanvas" width="640" height="640"></canvas>
+    </div>
+    <div class="stage-canvas-wrap" id="wrap-icons">
+      <canvas id="iconsCanvas" width="640" height="640"></canvas>
+    </div>
+  </div>
+  <div id="compositionWrap">
+    <span class="canvas-live-dot" id="canvasLiveDotComp"></span>
+    <div class="mosaic" id="mosaicGrid"></div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   STATE
+============================================================ */
+const defaults = {
+  dataType:"dapps", realtime:"no",
+  asset: {
+    bgShape:"ethereum", bgColor:"#000000", bgTransparent:true, previewBg:"black",
+    shape:"dots", shapeColor:"#FFFFFF",
+    size:5, amount:250, spacing:20, rotation:45,
+    animation:"none", speed:0.5, flow:0.8, variation:120,
+    priceIntensity:1
+  },
+  icons: {
+    layout:"square", bgColor:"#000000", bgTransparent:true, previewBg:"black",
+    cols:2, rows:2, center:"yes", uniform:"no",
+    shape:"mixed", style:"nested",
+    thickness:1, amount:4, spacing:5, rotation:0,
+    innerColor:"#FFFFFF", outerColor:"#FFFFFF"
+  },
+  comp: {
+    layout:"square", bgColor:"#000000", bgTransparent:true, previewBg:"black",
+    cols:2, rows:10, colOverlap:"yes", rowOverlap:"yes",
+    elements:["words","icons"],
+    elStyle:"outline", elColor:"#FFFFFF",
+    amount:24, maxAmount:25, spacing:5, rotation:0
+  }
+};
+
+let state = JSON.parse(JSON.stringify(defaults));
+let currentTab = "asset";
+let animFrame = null;
+let particleCache = {};
+let lastAssetTime = 0;
+
+/* ============================================================
+   LIVE ETHEREUM DATA STATE
+============================================================ */
+const SIM_DEFAULTS = {price:3000, tvl:60e9, validators:1000000, gas:20, dapps:4000};
+let liveData = {
+  price:null, tvl:null, validators:null, gas:null, dapps:null,
+  prev:{price:null,tvl:null,validators:null,gas:null,dapps:null},
+  sources:{price:"sim",tvl:"sim",validators:"sim",gas:"sim",dapps:"sim"},
+  timestamp:null
+};
+let realtimeIntervalId = null;
+let countdownIntervalId = null;
+let countdownRemaining = 60;
+let particleWorker = null;
+
+/* ============================================================
+   UTIL
+============================================================ */
+function get(obj, path){
+  return path.split(".").reduce((o,k)=>o[k], obj);
+}
+function set(obj, path, val){
+  const parts = path.split(".");
+  let o = obj;
+  for(let i=0;i<parts.length-1;i++) o = o[parts[i]];
+  o[parts[parts.length-1]] = val;
+}
+function rand(min,max){ return min + Math.random()*(max-min); }
+function randInt(min,max){ return Math.floor(rand(min,max+1)); }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// simple seeded pseudo-random for stable-ish layouts per generate
+let seed = 42;
+function seededRandom(){
+  seed = (seed * 9301 + 49297) % 233280;
+  return seed / 233280;
+}
+function seedFromString(s){
+  let h = 0;
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) | 0; }
+  return Math.abs(h) % 233280 || 1;
+}
+
+function noise2(x,y,t){
+  return Math.sin(x*0.02 + t) * Math.cos(y*0.02 + t*0.7);
+}
+
+function debounce(fn, ms){
+  let timer = null;
+  return function(...args){
+    clearTimeout(timer);
+    timer = setTimeout(()=>fn.apply(this,args), ms);
+  };
+}
+const debouncedRender = debounce(()=>render(), 16);
+
+/* ============================================================
+   BIND UI CONTROLS <-> STATE
+============================================================ */
+function initBindings(){
+  // selects / sliders / text
+  document.querySelectorAll("[data-bind]").forEach(el=>{
+    const path = el.getAttribute("data-bind");
+    const val = get(state, path);
+    if(el.tagName === "SELECT"){
+      el.value = val;
+      el.addEventListener("change", ()=>{
+        set(state, path, el.value);
+        render();
+        if(path === "dataType") mapLiveDataToAsset(true, 600);
+      });
+    } else if(el.type === "range"){
+      el.value = val;
+      updateSliderLabel(path, val);
+      el.addEventListener("input", ()=>{
+        set(state, path, parseFloat(el.value));
+        updateSliderLabel(path, el.value);
+        debouncedRender();
+      });
+    } else if(el.type === "color"){
+      el.value = val;
+      el.addEventListener("input", ()=>{
+        set(state, path, el.value);
+        // mark not transparent once user picks
+        const base = path.split(".")[0];
+        state[base].bgTransparent = false;
+        const sw = document.querySelector(`[data-swatch="${path}"]`);
+        if(sw) sw.textContent = el.value.toUpperCase();
+        render();
+      });
+    }
+  });
+
+  // radios
+  document.querySelectorAll("[data-radio]").forEach(group=>{
+    const path = group.getAttribute("data-radio");
+    group.querySelectorAll(".radio-option").forEach(opt=>{
+      opt.addEventListener("click", ()=>{
+        group.querySelectorAll(".radio-option").forEach(o=>o.classList.remove("selected"));
+        opt.classList.add("selected");
+        set(state, path, opt.getAttribute("data-value"));
+        render();
+      });
+    });
+  });
+
+  // checkboxes (multi)
+  document.querySelectorAll("[data-checkbox]").forEach(group=>{
+    const path = group.getAttribute("data-checkbox");
+    group.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+      cb.addEventListener("change", ()=>{
+        const arr = group.querySelectorAll("input[type=checkbox]:checked");
+        set(state, path, Array.from(arr).map(c=>c.parentElement.getAttribute("data-value")));
+        render();
+      });
+    });
+  });
+
+  // tabs
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      const tabName = btn.getAttribute("data-tab");
+      currentTab = tabName;
+      document.querySelectorAll(".tab-content").forEach(tc=>tc.classList.remove("active"));
+      document.getElementById("tab-"+tabName).classList.add("active");
+
+      document.getElementById("wrap-asset").classList.toggle("active", tabName==="asset");
+      document.getElementById("wrap-icons").classList.toggle("active", tabName==="icons");
+      document.getElementById("compositionWrap").classList.toggle("active", tabName==="composition");
+      document.querySelector(".stage").style.display = tabName==="composition" ? "none" : "flex";
+
+      stopAnimation();
+      render();
+    });
+  });
+
+  document.getElementById("btnRandomize").addEventListener("click", randomize);
+  document.getElementById("btnReset").addEventListener("click", resetDefaults);
+
+  // export menu
+  const exportMenu = document.getElementById("exportMenu");
+  document.getElementById("btnDownload").addEventListener("click", (e)=>{
+    e.stopPropagation();
+    exportMenu.classList.toggle("open");
+  });
+  exportMenu.addEventListener("click", (e)=>e.stopPropagation());
+  document.querySelectorAll("[data-export]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      exportMenu.classList.remove("open");
+      handleExport(btn.getAttribute("data-export"), btn);
+    });
+  });
+  document.addEventListener("click", ()=> exportMenu.classList.remove("open"));
+
+  // seed
+  document.getElementById("btnCopySeed").addEventListener("click", (e)=>copySeed(e.currentTarget));
+  document.getElementById("btnCopySeedLink").addEventListener("click", (e)=>copySeedLink(e.currentTarget));
+  document.getElementById("btnLoadSeed").addEventListener("click", ()=>{
+    const val = document.getElementById("seedInput").value.trim();
+    if(val) loadSeed(val);
+  });
+  document.getElementById("seedMoreToggle").addEventListener("click", (e)=>{
+    e.stopPropagation();
+    const body = document.getElementById("seedMoreBody");
+    const open = body.classList.toggle("open");
+    e.currentTarget.textContent = open ? "less" : "more";
+  });
+
+  // live data refresh
+  document.getElementById("btnRefreshData").addEventListener("click", (e)=>{
+    e.stopPropagation();
+    fetchEthereumData(true);
+  });
+
+  // live panel collapse/expand
+  document.getElementById("livePanelToggle").addEventListener("click", ()=>{
+    document.getElementById("livePanel").classList.toggle("expanded");
+    updateLiveHeaderLabel();
+  });
+}
+
+function updateSliderLabel(path, val){
+  const el = document.querySelector(`[data-val="${path}"]`);
+  if(el) el.textContent = val;
+}
+
+function reseed(){ seed = randInt(1, 99999); }
+
+/* ============================================================
+   RANDOMIZE / RESET
+============================================================ */
+const rangesMeta = {
+  "asset.size":[1,20], "asset.amount":[10,500], "asset.spacing":[0,50], "asset.rotation":[0,360],
+  "asset.speed":[0,2], "asset.flow":[0,2], "asset.variation":[0,360],
+  "icons.cols":[1,6], "icons.rows":[1,6], "icons.thickness":[1,5], "icons.amount":[1,10],
+  "icons.spacing":[1,20], "icons.rotation":[0,360],
+  "comp.cols":[1,6], "comp.rows":[1,10], "comp.amount":[1,50], "comp.maxAmount":[1,50],
+  "comp.spacing":[1,20], "comp.rotation":[0,360]
+};
+const selectMeta = {
+  "dataType":["dapps","staking","tvl","gas","price","mix"],
+  "asset.bgShape":["ethereum","circle","square","hexagon"],
+  "asset.shape":["dots","lines","squares","circles","triangles","cross","mixed"],
+  "asset.animation":["none","fluid","pulse","orbit","drift"],
+  "icons.layout":["square","horizontal","vertical"],
+  "icons.shape":["mixed","square","circle","star","diamond","cross","triangle"],
+  "icons.style":["outline","filled","nested","fragmented"],
+  "comp.layout":["square","masonry","asymmetric"],
+  "comp.elStyle":["outline","filled"]
+};
+const colorMeta = ["asset.shapeColor","icons.innerColor","icons.outerColor","comp.elColor"];
+
+function randomize(){
+  Object.keys(rangesMeta).forEach(path=>{
+    const [min,max] = rangesMeta[path];
+    const isInt = !(path.includes("speed") || path.includes("flow"));
+    const v = isInt ? randInt(min,max) : parseFloat(rand(min,max).toFixed(2));
+    set(state, path, v);
+  });
+  Object.keys(selectMeta).forEach(path=>{
+    set(state, path, pick(selectMeta[path]));
+  });
+  colorMeta.forEach(path=>{
+    const hue = randInt(0,360);
+    set(state, path, "#FFFFFF"); // keep true to white-on-black identity, but vary shape occasionally
+  });
+  reseed();
+  syncUIFromState();
+  render();
+}
+
+function resetDefaults(){
+  state = JSON.parse(JSON.stringify(defaults));
+  reseed();
+  syncUIFromState();
+  render();
+}
+
+function syncUIFromState(){
+  document.querySelectorAll("[data-bind]").forEach(el=>{
+    const path = el.getAttribute("data-bind");
+    const val = get(state, path);
+    if(el.tagName === "SELECT" || el.type === "range" || el.type === "color"){
+      el.value = val;
+      if(el.type === "range") updateSliderLabel(path, val);
+    }
+  });
+  document.querySelectorAll("[data-radio]").forEach(group=>{
+    const path = group.getAttribute("data-radio");
+    const val = get(state, path);
+    group.querySelectorAll(".radio-option").forEach(opt=>{
+      opt.classList.toggle("selected", opt.getAttribute("data-value") === val);
+    });
+  });
+  document.querySelectorAll("[data-checkbox]").forEach(group=>{
+    const path = group.getAttribute("data-checkbox");
+    const val = get(state, path);
+    group.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+      cb.checked = val.includes(cb.parentElement.getAttribute("data-value"));
+    });
+  });
+}
+
+/* ============================================================
+   ETHEREUM DIAMOND PATH
+   Classic gem silhouette: a single connected rhombus — top apex, left/right
+   waist points, bottom apex — formed from an upper triangle (top, right,
+   left) and a lower triangle (left, right, bottom) that share the exact
+   same waist points, so there is no gap between them.
+   Proportions from the 600x800 reference: waist sits at ~47% of the total
+   height (60 -> 380 -> 740), width spans the full left-right waist span.
+============================================================ */
+function diamondGeometry(cx, cy, w, h){
+  const top = {x:cx, y:cy - h/2};
+  const bottom = {x:cx, y:cy + h/2};
+  const waistY = cy - h/2 + h*0.4706;
+  const left = {x:cx - w/2, y:waistY};
+  const right = {x:cx + w/2, y:waistY};
+  return {top, bottom, left, right};
+}
+
+// Upper triangle: top -> right -> left -> close.
+function traceUpperShape(ctx, g){
+  ctx.moveTo(g.top.x, g.top.y);
+  ctx.lineTo(g.right.x, g.right.y);
+  ctx.lineTo(g.left.x, g.left.y);
+  ctx.closePath();
+}
+
+// Lower triangle: left -> right -> bottom -> close (shares the waist edge with the upper triangle).
+function traceLowerShape(ctx, g){
+  ctx.moveTo(g.left.x, g.left.y);
+  ctx.lineTo(g.right.x, g.right.y);
+  ctx.lineTo(g.bottom.x, g.bottom.y);
+  ctx.closePath();
+}
+
+// Single connected diamond/rhombus outline — used for clipping and bg-shape fill.
+function traceDiamondUnion(ctx, g){
+  ctx.beginPath();
+  ctx.moveTo(g.top.x, g.top.y);
+  ctx.lineTo(g.right.x, g.right.y);
+  ctx.lineTo(g.bottom.x, g.bottom.y);
+  ctx.lineTo(g.left.x, g.left.y);
+  ctx.closePath();
+}
+
+// Draws the full faceted gem artwork: upper/lower triangles get a subtle
+// fill each, both are stroked, plus the waist and vertical spine facet lines.
+function drawDiamondArt(ctx, g, strokeColor){
+  ctx.save();
+
+  ctx.beginPath();
+  traceUpperShape(ctx, g);
+  ctx.fillStyle = "rgba(255,255,255,0.02)";
+  ctx.fill();
+
+  ctx.beginPath();
+  traceLowerShape(ctx, g);
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  ctx.fill();
+
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  traceUpperShape(ctx, g);
+  ctx.stroke();
+  ctx.beginPath();
+  traceLowerShape(ctx, g);
+  ctx.stroke();
+
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(g.left.x, g.left.y); ctx.lineTo(g.right.x, g.right.y);
+  ctx.moveTo(g.top.x, g.top.y); ctx.lineTo(g.bottom.x, g.bottom.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function traceBgShape(ctx, shape, cx, cy, w, h){
+  if(shape === "ethereum"){
+    const g = diamondGeometry(cx, cy, w, h);
+    traceDiamondUnion(ctx, g);
+    return g;
+  }
+  ctx.beginPath();
+  if(shape === "circle"){
+    ctx.arc(cx, cy, Math.min(w,h)/2, 0, Math.PI*2);
+  } else if(shape === "square"){
+    ctx.rect(cx-w/2, cy-h/2, w, h);
+  } else if(shape === "hexagon"){
+    const r = Math.min(w,h)/2;
+    for(let i=0;i<6;i++){
+      const a = Math.PI/180 * (60*i - 90);
+      const x = cx + r*Math.cos(a), y = cy + r*Math.sin(a);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+  }
+  return null;
+}
+
+/* ============================================================
+   ASSET TAB RENDER
+============================================================ */
+const assetCanvas = document.getElementById("assetCanvas");
+const assetCtx = assetCanvas.getContext("2d");
+
+function setupCanvasDPR(canvas, ctx, cssW, cssH){
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + "px";
+  canvas.style.height = cssH + "px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+const ASSET_DIAMOND = {cx:320, cy:320, w:340, h:480};
+
+// Uniform random point inside a triangle, with an optional bias power that
+// pulls samples toward p1 (values <1 disperse toward the base, >1 cluster at p1).
+function randomPointInTriangle(p1, p2, p3, biasPow){
+  let r1 = seededRandom(), r2 = seededRandom();
+  if(r1 + r2 > 1){ r1 = 1-r1; r2 = 1-r2; }
+  if(biasPow && biasPow !== 1){
+    r1 = Math.pow(r1, biasPow);
+    r2 = Math.pow(r2, biasPow);
+    if(r1 + r2 > 1){ const t = r1; r1 = 1-r2; r2 = 1-t; }
+  }
+  return {
+    x: p1.x + r1*(p2.x-p1.x) + r2*(p3.x-p1.x),
+    y: p1.y + r1*(p2.y-p1.y) + r2*(p3.y-p1.y)
+  };
+}
+
+function buildAssetParticles(){
+  const s = state.asset;
+  seed = seedFromString("asset"+seed+s.dataType+s.amount+s.shape);
+  const {cx, cy, w, h} = ASSET_DIAMOND;
+  const g = diamondGeometry(cx, cy, w, h);
+  const particles = [];
+  const lowerRatio = 0.55; // lower section reads denser — represents "weight"/foundation
+  const spineExclusion = 10;
+
+  for(let i=0;i<s.amount;i++){
+    const inLower = seededRandom() < lowerRatio;
+    let pt;
+    if(inLower){
+      pt = randomPointInTriangle(g.bottom, g.left, g.right, 1.0);
+    } else {
+      // bias toward the apex/center-top, dispersing toward the waist edges
+      pt = randomPointInTriangle(g.top, g.left, g.right, 1.7);
+    }
+
+    // leave a visible "spine" gap along the vertical center line
+    const threshold = spineExclusion + s.size*0.6;
+    if(Math.abs(pt.x - cx) < threshold){
+      const dir = pt.x >= cx ? 1 : -1;
+      pt.x = cx + dir*threshold*(0.5 + seededRandom()*0.7);
+    }
+
+    particles.push({
+      x: pt.x, y: pt.y,
+      baseSize: s.size * (inLower ? (0.9 + seededRandom()*0.6) : (0.5 + seededRandom()*0.6)),
+      phase: seededRandom()*Math.PI*2,
+      speedMul: 0.6 + seededRandom()*0.8,
+      shapeVariant: pick(["dots","lines","squares","circles","triangles","cross"])
+    });
+  }
+  return particles;
+}
+
+function drawShape(ctx, type, x, y, size, rotation, color){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(rotation * Math.PI/180);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  switch(type){
+    case "dots":
+      ctx.arc(0,0,size/2,0,Math.PI*2);
+      ctx.fill();
+      break;
+    case "circles":
+      ctx.arc(0,0,size/2,0,Math.PI*2);
+      ctx.stroke();
+      break;
+    case "squares":
+      ctx.rect(-size/2,-size/2,size,size);
+      ctx.stroke();
+      break;
+    case "lines":
+      ctx.moveTo(-size,0); ctx.lineTo(size,0);
+      ctx.stroke();
+      break;
+    case "triangles":
+      ctx.moveTo(0,-size/1.5);
+      ctx.lineTo(size/1.5, size/2);
+      ctx.lineTo(-size/1.5, size/2);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    case "cross":
+      ctx.moveTo(-size/2,0); ctx.lineTo(size/2,0);
+      ctx.moveTo(0,-size/2); ctx.lineTo(0,size/2);
+      ctx.stroke();
+      break;
+  }
+  ctx.restore();
+}
+
+function renderAsset(t){
+  setupCanvasDPR(assetCanvas, assetCtx, 640, 640);
+  drawAssetScene(assetCtx, 640, 640, t);
+}
+
+// Reusable scene renderer — used by the live canvas and by PNG export at any scale.
+function drawAssetScene(ctx, cssW, cssH, t){
+  const s = state.asset;
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const cx = cssW/2, cy = cssH/2, w = ASSET_DIAMOND.w, h = ASSET_DIAMOND.h;
+  const g = diamondGeometry(cx, cy, w, h);
+
+  // background
+  if(!s.bgTransparent){
+    ctx.save();
+    traceBgShape(ctx, s.bgShape, cx, cy, w+20, h+20);
+    ctx.fillStyle = s.bgColor;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  const key = "asset_"+s.dataType+"_"+s.amount+"_"+s.shape;
+  if(!particleCache.asset || particleCache.assetKey !== key){
+    particleCache.asset = buildAssetParticles();
+    particleCache.assetKey = key;
+    if(s.amount > 300 && typeof Worker !== "undefined"){
+      requestParticlesFromWorker(s.amount, key, (workerParticles)=>{
+        if(workerParticles && particleCache.assetKey === key){
+          particleCache.asset = workerParticles;
+          if(currentTab === "asset" && state.asset.animation === "none") renderAsset(0);
+        }
+      });
+    }
+  }
+  const particles = particleCache.asset;
+
+  ctx.save();
+  traceDiamondUnion(ctx, g);
+  ctx.clip();
+
+  const time = t || 0;
+  const isAnimating = s.animation !== "none";
+  particles.forEach((pt, i)=>{
+    let x = pt.x - ASSET_DIAMOND.cx + cx, y = pt.y - ASSET_DIAMOND.cy + cy;
+    let size = pt.baseSize;
+    let rot = s.rotation;
+
+    if(s.animation === "fluid"){
+      const n = noise2(x + i, y + i, time * s.speed);
+      x += n * 20 * s.flow;
+      y += Math.cos(time*s.speed + pt.phase) * 10 * s.flow;
+    } else if(s.animation === "pulse"){
+      const pulse = 1 + Math.sin(time*s.speed*2 + pt.phase) * 0.4 * s.flow;
+      size = size * pulse;
+    } else if(s.animation === "orbit"){
+      const r = Math.hypot(x-cx, y-cy);
+      const baseAngle = Math.atan2(y-cy, x-cx);
+      const angle = baseAngle + time * s.speed * 0.5 * pt.speedMul;
+      x = cx + Math.cos(angle)*r;
+      y = cy + Math.sin(angle)*r;
+    } else if(s.animation === "drift"){
+      y += ((time*s.speed*30 + pt.phase*40) % (h+40)) * s.flow * 0.3 - h*0.15*s.flow;
+    }
+
+    // gentle organic drift layered on top of whichever animation is active,
+    // so particles never look pinned in place while animating
+    if(isAnimating){
+      x += noise2(pt.x, pt.y, time*0.3) * 3;
+      y += noise2(pt.y, pt.x, time*0.3 + 10) * 3;
+    }
+
+    const variantJitter = (s.variation/360) * pt.phase;
+    const shapeType = s.shape === "mixed" ? pt.shapeVariant : s.shape;
+    ctx.globalAlpha = s.priceIntensity != null ? s.priceIntensity : 1;
+    drawShape(ctx, shapeType, x, y, size, rot + variantJitter*30, s.shapeColor);
+    ctx.globalAlpha = 1;
+  });
+
+  ctx.restore();
+
+  // faceted diamond artwork drawn on top
+  drawDiamondArt(ctx, g, "#FFFFFF");
+}
+
+function stopAnimation(){
+  if(animFrame){ cancelAnimationFrame(animFrame); animFrame = null; }
+}
+function startAssetAnimation(){
+  stopAnimation();
+  const startTime = performance.now();
+  function loop(now){
+    const t = (now - startTime) / 1000;
+    lastAssetTime = t;
+    renderAsset(t);
+    animFrame = requestAnimationFrame(loop);
+  }
+  animFrame = requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   PARTICLE WEB WORKER (offloads heavy sampling when amount > 300)
+   Progressive enhancement only: the main thread always computes a
+   synchronous result first so the canvas never blocks on the worker.
+============================================================ */
+function createParticleWorker(){
+  const src = `
+    function seeded(ref){ ref.v = (ref.v*9301+49297)%233280; return ref.v/233280; }
+    function randomPointInTriangle(p1,p2,p3,biasPow,ref){
+      let r1=seeded(ref), r2=seeded(ref);
+      if(r1+r2>1){ r1=1-r1; r2=1-r2; }
+      if(biasPow && biasPow!==1){
+        r1=Math.pow(r1,biasPow); r2=Math.pow(r2,biasPow);
+        if(r1+r2>1){ const t=r1; r1=1-r2; r2=1-t; }
+      }
+      return {x:p1.x+r1*(p2.x-p1.x)+r2*(p3.x-p1.x), y:p1.y+r1*(p2.y-p1.y)+r2*(p3.y-p1.y)};
+    }
+    onmessage = function(e){
+      const {amount, size, cx, g, seedStart, shapeVariants} = e.data;
+      const ref = {v:seedStart};
+      const lowerRatio = 0.55, spineExclusion = 10;
+      const particles = [];
+      for(let i=0;i<amount;i++){
+        const inLower = seeded(ref) < lowerRatio;
+        const pt = inLower
+          ? randomPointInTriangle(g.bottom, g.left, g.right, 1.0, ref)
+          : randomPointInTriangle(g.top, g.left, g.right, 1.7, ref);
+        const threshold = spineExclusion + size*0.6;
+        if(Math.abs(pt.x-cx) < threshold){
+          const dir = pt.x>=cx ? 1 : -1;
+          pt.x = cx + dir*threshold*(0.5+seeded(ref)*0.7);
+        }
+        particles.push({
+          x: pt.x, y: pt.y,
+          baseSize: size*(inLower ? (0.9+seeded(ref)*0.6) : (0.5+seeded(ref)*0.6)),
+          phase: seeded(ref)*Math.PI*2,
+          speedMul: 0.6+seeded(ref)*0.8,
+          shapeVariant: shapeVariants[Math.floor(seeded(ref)*shapeVariants.length)]
+        });
+      }
+      postMessage(particles);
+    };
+  `;
+  const blob = new Blob([src], {type:"application/javascript"});
+  return new Worker(URL.createObjectURL(blob));
+}
+
+function requestParticlesFromWorker(amount, key, cb){
+  try{
+    if(!particleWorker) particleWorker = createParticleWorker();
+    const {cx, cy, w, h} = ASSET_DIAMOND;
+    const g = diamondGeometry(cx, cy, w, h);
+    particleWorker.onmessage = (e)=> cb(e.data);
+    particleWorker.onerror = ()=> cb(null);
+    particleWorker.postMessage({
+      amount, size: state.asset.size, cx, g, seedStart: seed,
+      shapeVariants: ["dots","lines","squares","circles","triangles","cross"]
+    });
+  }catch(e){
+    cb(null);
+  }
+}
+
+/* ============================================================
+   ICONS TAB RENDER
+============================================================ */
+const iconsCanvas = document.getElementById("iconsCanvas");
+const iconsCtx = iconsCanvas.getContext("2d");
+
+function traceIconShape(ctx, shape, size, rotation){
+  ctx.save();
+  ctx.rotate(rotation*Math.PI/180);
+  ctx.beginPath();
+  const r = size/2;
+  if(shape === "square"){
+    ctx.rect(-r,-r,size,size);
+  } else if(shape === "circle"){
+    ctx.arc(0,0,r,0,Math.PI*2);
+  } else if(shape === "triangle"){
+    ctx.moveTo(0,-r); ctx.lineTo(r*0.9,r*0.75); ctx.lineTo(-r*0.9,r*0.75); ctx.closePath();
+  } else if(shape === "cross"){
+    const t = size*0.28;
+    ctx.moveTo(-t/2,-r); ctx.lineTo(t/2,-r); ctx.lineTo(t/2,-t/2);
+    ctx.lineTo(r,-t/2); ctx.lineTo(r,t/2); ctx.lineTo(t/2,t/2);
+    ctx.lineTo(t/2,r); ctx.lineTo(-t/2,r); ctx.lineTo(-t/2,t/2);
+    ctx.lineTo(-r,t/2); ctx.lineTo(-r,-t/2); ctx.lineTo(-t/2,-t/2);
+    ctx.closePath();
+  } else if(shape === "star"){
+    const spikes = 5, outerR = r, innerR = r*0.45;
+    for(let i=0;i<spikes*2;i++){
+      const a = (Math.PI/spikes)*i - Math.PI/2;
+      const rr = i%2===0 ? outerR : innerR;
+      const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+  }
+  ctx.restore();
+}
+
+function strokeDashedPath(ctx, gapLen){
+  ctx.save();
+  ctx.setLineDash([Math.max(2, 14-gapLen), gapLen]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Radiating lines from center, 8 directions — used for the "cross/star" cycle slot.
+function drawRadiatingLines(ctx, size, rotation, color, thickness){
+  ctx.save();
+  ctx.rotate(rotation*Math.PI/180);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thickness;
+  const r = size/2;
+  for(let i=0;i<8;i++){
+    const a = (Math.PI*2/8)*i;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Ethereum gem outline, nested/fragmented — used for the "diamond" cycle slot.
+function drawGemIcon(ctx, size, style, amount, spacing, rotation, innerColor, outerColor, thickness){
+  ctx.save();
+  ctx.rotate(rotation*Math.PI/180);
+  ctx.lineWidth = thickness;
+  const reps = (style === "nested" || style === "fragmented") ? amount : 1;
+  for(let i=0;i<reps;i++){
+    const scale = 1 - i*(spacing/100 + 0.08);
+    if(scale <= 0.15) break;
+    const g = diamondGeometry(0, 0, size*0.75*scale, size*1.1*scale);
+    ctx.strokeStyle = i===0 ? outerColor : innerColor;
+    ctx.beginPath();
+    traceUpperShape(ctx, g);
+    traceLowerShape(ctx, g);
+    if(style === "fragmented"){
+      ctx.setLineDash([Math.max(2, 10-i*2), 4+i*2]);
+    } else {
+      ctx.setLineDash([]);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawIconGeneric(ctx, shape, rotation, cellSize){
+  const s = state.icons;
+  const maxSize = cellSize * 0.7;
+  ctx.lineWidth = s.thickness;
+
+  if(s.style === "outline"){
+    ctx.strokeStyle = s.outerColor;
+    traceIconShape(ctx, shape, maxSize, rotation);
+    ctx.stroke();
+  } else if(s.style === "filled"){
+    ctx.fillStyle = s.innerColor;
+    ctx.strokeStyle = s.outerColor;
+    traceIconShape(ctx, shape, maxSize, rotation);
+    ctx.fill();
+    ctx.stroke();
+  } else if(s.style === "nested"){
+    for(let i=0;i<s.amount;i++){
+      const size = maxSize - i*(s.spacing + maxSize/(s.amount+2));
+      if(size <= 4) break;
+      ctx.strokeStyle = i===0 ? s.outerColor : s.innerColor;
+      traceIconShape(ctx, shape, size, rotation + i*6);
+      ctx.stroke();
+    }
+  } else if(s.style === "fragmented"){
+    for(let i=0;i<s.amount;i++){
+      const size = maxSize - i*(s.spacing*0.6);
+      if(size <= 4) break;
+      ctx.strokeStyle = i===0 ? s.outerColor : s.innerColor;
+      traceIconShape(ctx, shape, size, rotation + i*15);
+      strokeDashedPath(ctx, 4 + i*3);
+    }
+  }
+}
+
+const ICON_SHAPE_CYCLE = ["square","circle","radiant","diamond","star","triangle"];
+
+// Renders one grid cell's icon. `shapeType` is either the cycled shape (Mixed mode)
+// or the filtered shape (specific selection), and `cellIndex` drives the per-cell
+// rotation offset used when a single shape is selected as a filter.
+function drawCellIcon(ctx, cx, cy, cellSize, shapeType, cellIndex){
+  const s = state.icons;
+  const rotation = s.shape === "mixed" ? s.rotation : s.rotation + cellIndex*15;
+  ctx.save();
+  ctx.translate(cx, cy);
+  if(shapeType === "radiant"){
+    drawRadiatingLines(ctx, cellSize*0.7, rotation, s.outerColor, s.thickness);
+  } else if(shapeType === "diamond"){
+    drawGemIcon(ctx, cellSize*0.7, s.style, s.amount, s.spacing, rotation, s.innerColor, s.outerColor, s.thickness);
+  } else {
+    drawIconGeneric(ctx, shapeType, rotation, cellSize);
+  }
+  ctx.restore();
+}
+
+function renderIcons(){
+  setupCanvasDPR(iconsCanvas, iconsCtx, 640, 640);
+  drawIconsScene(iconsCtx, 640, 640);
+}
+
+// Reusable scene renderer — used by the live canvas and by PNG export at any scale.
+function drawIconsScene(ctx, cssW, cssH){
+  const s = state.icons;
+  ctx.clearRect(0,0,cssW,cssH);
+
+  if(!s.bgTransparent){
+    ctx.fillStyle = s.bgColor;
+    ctx.fillRect(0,0,cssW,cssH);
+  }
+
+  let cols = s.cols, rows = s.rows;
+  if(s.layout === "horizontal"){ rows = Math.max(1, Math.min(rows, cols)); }
+  if(s.layout === "vertical"){ cols = Math.max(1, Math.min(cols, rows)); }
+
+  const padding = 40;
+  const cellW = (cssW - padding*2) / cols;
+  const cellH = (cssH - padding*2) / rows;
+  const cellSize = s.uniform === "yes" ? Math.min(cellW, cellH) : Math.min(cellW, cellH);
+
+  const localSeed = seedFromString("icons"+seed+s.shape+s.style);
+  seed = localSeed;
+
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const cellX = padding + c*cellW;
+      const cellY = padding + r*cellH;
+
+      ctx.save();
+      const rectPad = 4;
+      const rw = cellW - rectPad*2, rh = cellH - rectPad*2;
+      roundRect(ctx, cellX+rectPad, cellY+rectPad, rw, rh, 10);
+      ctx.fillStyle = "#1A1A1A";
+      ctx.fill();
+      ctx.strokeStyle = "#2A2A2A";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+
+      let cx, cy;
+      if(s.center === "yes"){
+        cx = cellX + cellW/2;
+        cy = cellY + cellH/2;
+      } else {
+        const jitterX = (seededRandom()-0.5) * cellW*0.2;
+        const jitterY = (seededRandom()-0.5) * cellH*0.2;
+        cx = cellX + cellW/2 + jitterX;
+        cy = cellY + cellH/2 + jitterY;
+      }
+
+      const localCellSize = s.uniform === "yes" ? cellSize : Math.min(cellW, cellH) * (0.7 + seededRandom()*0.3);
+      const cellIndex = r*cols + c;
+      const shapeForCell = s.shape === "mixed" ? ICON_SHAPE_CYCLE[cellIndex % ICON_SHAPE_CYCLE.length] : s.shape;
+      drawCellIcon(ctx, cx, cy, localCellSize, shapeForCell, cellIndex);
+    }
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+/* ============================================================
+   COMPOSITION TAB RENDER (DOM based)
+============================================================ */
+const patternTypes = ["hatch","quarterCircles","dots","nestedSquares","vLines","crosses","starburst","arcs"];
+
+function drawPattern(ctx, w, h, type, color, spacing, rotation, amount){
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1;
+  const gap = Math.max(3, spacing);
+  ctx.save();
+  ctx.translate(w/2,h/2);
+  ctx.rotate(rotation*Math.PI/180);
+  ctx.translate(-w/2,-h/2);
+
+  switch(type){
+    case "hatch":
+      for(let x=-h; x<w+h; x+=gap){
+        ctx.beginPath();
+        ctx.moveTo(x,0); ctx.lineTo(x+h,h);
+        ctx.stroke();
+      }
+      break;
+    case "quarterCircles":
+      for(let r=gap; r<Math.max(w,h)*1.5; r+=gap){
+        ctx.beginPath();
+        ctx.arc(0,h,r,-Math.PI/2,0);
+        ctx.stroke();
+      }
+      break;
+    case "dots": {
+      const n = amount*4;
+      let ls = seedFromString(type+w+h+n);
+      for(let i=0;i<n;i++){
+        ls = (ls*9301+49297)%233280;
+        const rx = (ls/233280);
+        ls = (ls*9301+49297)%233280;
+        const ry = (ls/233280);
+        ctx.beginPath();
+        ctx.arc(rx*w, ry*h, 1.4, 0, Math.PI*2);
+        ctx.fill();
+      }
+      break;
+    }
+    case "nestedSquares":
+      for(let i=0; i<amount; i++){
+        const inset = i*gap;
+        if(w-inset*2 <= 4 || h-inset*2 <= 4) break;
+        ctx.strokeRect(inset, inset, w-inset*2, h-inset*2);
+      }
+      break;
+    case "vLines":
+      for(let x=0; x<w; x+=gap){
+        ctx.beginPath();
+        ctx.moveTo(x,0); ctx.lineTo(x,h);
+        ctx.stroke();
+      }
+      break;
+    case "crosses": {
+      const n = amount;
+      let ls = seedFromString(type+w+h+n);
+      for(let i=0;i<n;i++){
+        ls = (ls*9301+49297)%233280;
+        const rx = (ls/233280)*w;
+        ls = (ls*9301+49297)%233280;
+        const ry = (ls/233280)*h;
+        const s = 4;
+        ctx.beginPath();
+        ctx.moveTo(rx-s,ry); ctx.lineTo(rx+s,ry);
+        ctx.moveTo(rx,ry-s); ctx.lineTo(rx,ry+s);
+        ctx.stroke();
+      }
+      break;
+    }
+    case "starburst": {
+      const cx = w/2, cy = h/2;
+      const rays = Math.max(6, amount);
+      for(let i=0;i<rays;i++){
+        const a = (Math.PI*2/rays)*i;
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.lineTo(cx+Math.cos(a)*Math.max(w,h), cy+Math.sin(a)*Math.max(w,h));
+        ctx.stroke();
+      }
+      break;
+    }
+    case "arcs":
+      for(let i=0;i<amount/2;i++){
+        const r = gap*(i+1);
+        ctx.beginPath();
+        ctx.arc(w/2, -r/3, r, 0.2, Math.PI-0.2);
+        ctx.stroke();
+      }
+      break;
+  }
+  ctx.restore();
+}
+
+// Small standalone icon tiles for the composition mosaic — driven by the
+// comp tab's own Elements controls (color / rotation), independent of the Icons tab.
+function drawCompIconTile(ctx, w, h, subtype){
+  const s = state.comp;
+  ctx.clearRect(0,0,w,h);
+  const cx = w/2, cy = h/2;
+  const maxSize = Math.min(w,h) * 0.6;
+  ctx.strokeStyle = s.elColor;
+  ctx.fillStyle = s.elColor;
+  ctx.lineWidth = 1.5;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((s.rotation||0) * Math.PI/180);
+
+  if(subtype === "circle"){
+    for(let i=0;i<3;i++){
+      const r = (maxSize/2) * (1 - i*0.28);
+      ctx.beginPath();
+      ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.stroke();
+    }
+  } else if(subtype === "nestedSquare"){
+    for(let i=0;i<3;i++){
+      const size = maxSize * (1 - i*0.28);
+      ctx.strokeRect(-size/2,-size/2,size,size);
+    }
+  } else if(subtype === "circlesGrid"){
+    const r = maxSize*0.16, off = maxSize*0.28;
+    [[-off,-off],[off,-off],[-off,off],[off,off]].forEach(([x,y])=>{
+      ctx.beginPath();
+      ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.stroke();
+    });
+  } else if(subtype === "fragmentedDiamond"){
+    for(let i=0;i<3;i++){
+      const scale = 1 - i*0.22;
+      const g = diamondGeometry(0, 0, maxSize*0.68*scale, maxSize*1.05*scale);
+      ctx.beginPath();
+      traceUpperShape(ctx, g);
+      traceLowerShape(ctx, g);
+      ctx.setLineDash([4, 4+i*3]);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+function buildMosaic(){
+  const s = state.comp;
+  const mosaic = document.getElementById("mosaicGrid");
+  mosaic.innerHTML = "";
+
+  const layout = [
+    {type:"pill", text:"Ethereum Foundation", size:"wide", area:"1 / 1 / 2 / 3"},
+    {type:"pill", text:"Ecosystem", size:"small", area:"1 / 3 / 2 / 5"},
+    {type:"iconTile", icon:"circle", area:"1 / 5 / 2 / 7"},
+    {type:"asset", area:"2 / 1 / 4 / 3"},
+    {type:"pattern", pat:"quarterCircles", area:"2 / 3 / 3 / 4"},
+    {type:"pill", text:"Blockchain", size:"wide", area:"2 / 4 / 3 / 7"},
+    {type:"pattern", pat:"dots", area:"3 / 3 / 4 / 4"},
+    {type:"iconTile", icon:"nestedSquare", area:"3 / 4 / 4 / 5"},
+    {type:"pattern", pat:"vLines", area:"3 / 5 / 4 / 7"},
+    {type:"pill", text:"Devs", size:"small", area:"4 / 1 / 5 / 2"},
+    {type:"pattern", pat:"crosses", area:"4 / 2 / 5 / 4"},
+    {type:"pattern", pat:"starburst", area:"4 / 4 / 5 / 7"},
+    {type:"pattern", pat:"arcs", area:"5 / 1 / 6 / 2"},
+    {type:"pill", text:"Ethereum", size:"small", area:"5 / 2 / 6 / 4"},
+    {type:"pattern", pat:"hatch", area:"5 / 4 / 6 / 7"},
+    {type:"pill", text:"Community", size:"small", area:"6 / 1 / 7 / 3"},
+    {type:"iconTile", icon:"circlesGrid", area:"6 / 3 / 7 / 4"},
+    {type:"pattern", pat:"quarterCircles", area:"6 / 4 / 7 / 7"},
+    {type:"pill", text:"Decentralization", size:"wide", area:"7 / 1 / 8 / 4"},
+    {type:"pill", text:"Innovation", size:"wide", area:"7 / 4 / 8 / 6"},
+    {type:"iconTile", icon:"fragmentedDiamond", area:"7 / 6 / 8 / 7"},
+  ];
+
+  const includeWords = s.elements.includes("words");
+  const includeIcons = s.elements.includes("icons");
+
+  layout.forEach((item, idx)=>{
+    if(item.type === "pill"){
+      if(!includeWords) return;
+      const el = document.createElement("div");
+      el.className = "pill " + (item.size === "wide" ? "pill-wide" : "pill-small");
+      el.style.gridArea = item.area;
+      el.style.borderColor = s.elColor;
+      el.style.color = s.elColor;
+      el.textContent = item.text;
+      mosaic.appendChild(el);
+    } else if(item.type === "iconTile"){
+      if(!includeIcons) return;
+      const el = document.createElement("div");
+      el.className = "mosaic-tile";
+      el.style.gridArea = item.area;
+      const canvas = document.createElement("canvas");
+      const rect = {w: 220, h: 160};
+      canvas.width = rect.w * 2;
+      canvas.height = rect.h * 2;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(2,2);
+      drawCompIconTile(ctx, rect.w, rect.h, item.icon);
+      el.appendChild(canvas);
+      mosaic.appendChild(el);
+    } else if(item.type === "pattern"){
+      if(!includeIcons) return;
+      const el = document.createElement("div");
+      el.className = "mosaic-tile";
+      el.style.gridArea = item.area;
+      const canvas = document.createElement("canvas");
+      const rect = {w: 220, h: 160};
+      canvas.width = rect.w * 2;
+      canvas.height = rect.h * 2;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(2,2);
+      drawPattern(ctx, rect.w, rect.h, item.pat, s.elColor, s.spacing, s.rotation, s.amount);
+      el.appendChild(canvas);
+      mosaic.appendChild(el);
+    } else if(item.type === "asset"){
+      const el = document.createElement("div");
+      el.className = "mosaic-asset";
+      el.style.gridArea = item.area;
+      const canvas = document.createElement("canvas");
+      const rect = {w:220, h:340};
+      canvas.width = rect.w*2;
+      canvas.height = rect.h*2;
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      const ctx = canvas.getContext("2d");
+      ctx.scale(2,2);
+      renderMiniAsset(ctx, rect.w, rect.h);
+      el.appendChild(canvas);
+      mosaic.appendChild(el);
+    }
+  });
+}
+
+function renderMiniAsset(ctx, w, h){
+  const s = state.asset;
+  const cx = w/2, cy = h/2, dw = w*0.8, dh = h*0.85;
+  const g = diamondGeometry(cx, cy, dw, dh);
+
+  ctx.save();
+  traceDiamondUnion(ctx, g);
+  ctx.clip();
+  const lowerRatio = 0.55;
+  let ls = seedFromString("miniasset"+seed);
+  function localRand(){ ls = (ls*9301+49297)%233280; return ls/233280; }
+  const n = Math.min(120, Math.max(30, state.comp.amount*3));
+  for(let i=0;i<n;i++){
+    const inLower = localRand() < lowerRatio;
+    let r1 = localRand(), r2 = localRand();
+    if(r1+r2>1){ r1=1-r1; r2=1-r2; }
+    let p1;
+    if(inLower){
+      p1 = g.bottom;
+    } else {
+      p1 = g.top;
+      r1=Math.pow(r1,1.7); r2=Math.pow(r2,1.7); if(r1+r2>1){const t=r1;r1=1-r2;r2=1-t;}
+    }
+    const x = p1.x + r1*(g.left.x-p1.x) + r2*(g.right.x-p1.x);
+    const y = p1.y + r1*(g.left.y-p1.y) + r2*(g.right.y-p1.y);
+    ctx.beginPath();
+    ctx.fillStyle = s.shapeColor;
+    ctx.arc(x,y, s.size*0.35*(inLower?1.2:0.9), 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  drawDiamondArt(ctx, g, "#FFFFFF");
+}
+
+/* ============================================================
+   LIVE ETHEREUM DATA — FETCH LAYER
+   All 5 sources are fetched in parallel via Promise.allSettled so one
+   failing endpoint never blocks the others. Each request is capped at
+   10s via AbortController; a failed/timed-out source falls back to a
+   simulated value and is flagged "sim" in liveData.sources.
+   Note: only the 'Accept' header is sent (not 'Content-Type') — adding
+   Content-Type to a GET request turns it into a non-simple CORS request
+   requiring an OPTIONS preflight that these public endpoints don't serve,
+   which would break the fetch entirely.
+============================================================ */
+function fetchWithTimeout(url, ms){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), ms);
+  return fetch(url, {signal:controller.signal, headers:{"Accept":"application/json"}})
+    .finally(()=>clearTimeout(timer));
+}
+
+async function fetchPrice(){
+  const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd", 10000);
+  if(!res.ok) throw new Error("price fetch failed");
+  const data = await res.json();
+  return data.ethereum.usd;
+}
+async function fetchTVL(){
+  const res = await fetchWithTimeout("https://api.llama.fi/v2/chains", 10000);
+  if(!res.ok) throw new Error("tvl fetch failed");
+  const data = await res.json();
+  const eth = data.find(c=>c.name === "Ethereum");
+  if(!eth) throw new Error("ethereum chain not found");
+  return eth.tvl;
+}
+async function fetchValidators(){
+  const res = await fetchWithTimeout("https://beaconcha.in/api/v1/epoch/latest", 10000);
+  if(!res.ok) throw new Error("validators fetch failed");
+  const json = await res.json();
+  return json.data.validatorcount;
+}
+async function fetchGas(){
+  const res = await fetchWithTimeout("https://api.etherscan.io/api?module=gastracker&action=gasoracle", 10000);
+  if(!res.ok) throw new Error("gas fetch failed");
+  const json = await res.json();
+  if(!json.result || !json.result.ProposeGasPrice) throw new Error("bad gas payload");
+  return parseFloat(json.result.ProposeGasPrice);
+}
+async function fetchDapps(){
+  const res = await fetchWithTimeout("https://api.llama.fi/protocols", 10000);
+  if(!res.ok) throw new Error("protocols fetch failed");
+  const json = await res.json();
+  return json.length;
+}
+
+const LIVE_CACHE_KEY = "eth-brand-gen-live-cache";
+const LIVE_CACHE_TTL = 60000;
+function readLiveCache(){
+  try{
+    const raw = sessionStorage.getItem(LIVE_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(Date.now() - parsed.timestamp > LIVE_CACHE_TTL) return null;
+    return parsed;
+  }catch(e){ return null; }
+}
+function writeLiveCache(data){
+  try{ sessionStorage.setItem(LIVE_CACHE_KEY, JSON.stringify(data)); }catch(e){}
+}
+
+async function fetchEthereumData(force){
+  if(!force){
+    const cached = readLiveCache();
+    if(cached){ applyLiveData(cached, false); return cached; }
+  }
+  setLiveLoadingUI(true);
+  const results = await Promise.allSettled([fetchPrice(), fetchTVL(), fetchValidators(), fetchGas(), fetchDapps()]);
+  const [priceR, tvlR, validatorsR, gasR, dappsR] = results;
+  const next = {
+    price: priceR.status==="fulfilled" ? priceR.value : SIM_DEFAULTS.price,
+    tvl: tvlR.status==="fulfilled" ? tvlR.value : SIM_DEFAULTS.tvl,
+    validators: validatorsR.status==="fulfilled" ? validatorsR.value : SIM_DEFAULTS.validators,
+    gas: gasR.status==="fulfilled" ? gasR.value : SIM_DEFAULTS.gas,
+    dapps: dappsR.status==="fulfilled" ? dappsR.value : SIM_DEFAULTS.dapps,
+    sources: {
+      price: priceR.status==="fulfilled" ? "live" : "sim",
+      tvl: tvlR.status==="fulfilled" ? "live" : "sim",
+      validators: validatorsR.status==="fulfilled" ? "live" : "sim",
+      gas: gasR.status==="fulfilled" ? "live" : "sim",
+      dapps: dappsR.status==="fulfilled" ? "live" : "sim"
+    },
+    timestamp: Date.now()
+  };
+  const allFailed = results.every(r=>r.status==="rejected");
+  writeLiveCache(next);
+  applyLiveData(next, true);
+  setLiveLoadingUI(false);
+  showLiveFallback(allFailed);
+  return next;
+}
+
+function applyLiveData(next, tween){
+  const prevSnapshot = {price:liveData.price, tvl:liveData.tvl, validators:liveData.validators, gas:liveData.gas, dapps:liveData.dapps};
+  liveData = Object.assign({}, next, {prev: prevSnapshot});
+  renderLivePanel();
+  mapLiveDataToAsset(tween);
+}
+
+function setLiveLoadingUI(loading){
+  if(loading){
+    document.querySelectorAll(".live-metric-value").forEach(el=>{
+      el.innerHTML = '<span class="skeleton"></span>';
+    });
+  }
+}
+function showLiveFallback(show){
+  const el = document.getElementById("liveFallback");
+  if(el) el.style.display = show ? "block" : "none";
+}
+
+function renderLivePanel(){
+  if(liveData.price == null) return;
+  const arrow = (cur, prev)=>{
+    if(prev == null || cur === prev) return "";
+    const up = cur > prev;
+    return `<span class="live-change ${up?"up":"down"}">${up?"▲":"▼"}</span>`;
+  };
+  const setMetric = (key, html)=>{ const el=document.querySelector(`[data-metric="${key}"]`); if(el) el.innerHTML = html; };
+  const setDot = (key, live)=>{ const el=document.querySelector(`[data-dot="${key}"]`); if(el) el.classList.toggle("live", live); };
+
+  setMetric("price", `$${Math.round(liveData.price).toLocaleString()} ${arrow(liveData.price, liveData.prev.price)}`);
+  setMetric("tvl", `$${(liveData.tvl/1e9).toFixed(1)}B ${arrow(liveData.tvl, liveData.prev.tvl)}`);
+  setMetric("validators", `${(liveData.validators/1e6).toFixed(2)}M ${arrow(liveData.validators, liveData.prev.validators)}`);
+  setMetric("gas", `${Math.round(liveData.gas)} Gwei ${arrow(liveData.gas, liveData.prev.gas)}`);
+  setMetric("dapps", `${liveData.dapps.toLocaleString()} ${arrow(liveData.dapps, liveData.prev.dapps)}`);
+
+  setDot("price", liveData.sources.price === "live");
+  setDot("tvl", liveData.sources.tvl === "live");
+  setDot("validators", liveData.sources.validators === "live");
+  setDot("gas", liveData.sources.gas === "live");
+  setDot("dapps", liveData.sources.dapps === "live");
+
+  const updatedEl = document.getElementById("liveUpdated");
+  if(updatedEl) updatedEl.textContent = "Last updated: " + new Date(liveData.timestamp).toLocaleTimeString();
+
+  updateLiveHeaderLabel();
+}
+
+// Collapsed header shows a live ticker of the primary metric when real-time
+// tracking is on, so the key number is always visible without expanding.
+function updateLiveHeaderLabel(){
+  const labelEl = document.getElementById("livePanelLabel");
+  const dotEl = document.getElementById("liveStatusDot");
+  if(!labelEl || !dotEl) return;
+  const panel = document.getElementById("livePanel");
+  const collapsed = panel && !panel.classList.contains("expanded");
+  const on = anyRealtimeOn();
+  dotEl.classList.toggle("active", on);
+  if(collapsed && on && liveData.price != null){
+    labelEl.textContent = `ETH $${Math.round(liveData.price).toLocaleString()} —`;
+  } else {
+    labelEl.textContent = "Live Ethereum Data";
+  }
+}
+
+/* ============================================================
+   DATA-TO-VISUAL MAPPING + TWEEN
+   Base associations: TVL->Amount, Validators->Size, dApps->Spacing,
+   Gas->Speed, Price->intensity (opacity). The "Type of data" dropdown
+   promotes one source to drive the headline parameter(s):
+     dApps    -> dApp count becomes the primary Amount driver
+     Staking  -> validator count drives Size (default association, made primary)
+     TVL      -> TVL drives Amount AND Spacing
+     Gas      -> Gas drives Speed AND Rotation
+     ETH Price-> price drives overall intensity/opacity
+     Mix      -> every source drives its association simultaneously, incl. Gas->Rotation
+============================================================ */
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+function computeLiveTargets(){
+  const amountTVL = clamp(liveData.tvl/1e9*5, 10, 500);
+  const sizeVal = clamp(liveData.validators/1e6*10, 1, 20);
+  const spacingDapps = clamp(50 - (liveData.dapps/3000)*49, 1, 50);
+  const speedGas = clamp(0.1 + Math.max(0, liveData.gas-1)/99*(2.0-0.1), 0, 2);
+  const rotationGas = (liveData.gas*3.6) % 360;
+  const intensityPrice = clamp(liveData.price/5000, 0.3, 1);
+
+  const targets = {amount:amountTVL, size:sizeVal, spacing:spacingDapps, speed:speedGas, priceIntensity:intensityPrice};
+  const dt = state.dataType;
+  if(dt === "dapps"){
+    targets.amount = clamp(liveData.dapps/10, 10, 500);
+  } else if(dt === "tvl"){
+    targets.amount = amountTVL;
+    targets.spacing = clamp(50 - amountTVL/500*49, 1, 50);
+  } else if(dt === "gas"){
+    targets.speed = speedGas;
+    targets.rotation = rotationGas;
+  } else if(dt === "mix"){
+    targets.rotation = rotationGas;
+  }
+  return targets;
+}
+
+function syncAssetSliderUI(){
+  ["amount","size","spacing","speed","rotation"].forEach(k=>{
+    const el = document.querySelector(`[data-bind="asset.${k}"]`);
+    const val = Math.round(state.asset[k]*100)/100;
+    if(el) el.value = val;
+    updateSliderLabel("asset."+k, val);
+  });
+}
+
+// Blue glow (2s fade) on the sliders whose value just changed from a data-driven update.
+function glowSliders(keys){
+  keys.forEach(k=>{
+    const el = document.querySelector(`[data-bind="asset.${k}"]`);
+    if(!el) return;
+    const control = el.closest(".control");
+    if(!control) return;
+    control.classList.remove("glow");
+    void control.offsetWidth; // restart the CSS animation
+    control.classList.add("glow");
+  });
+}
+
+function tweenAssetTargets(targets, duration){
+  const startVals = {};
+  Object.keys(targets).forEach(k=>{ startVals[k] = state.asset[k]; });
+  const t0 = performance.now();
+  function step(now){
+    const t = Math.min(1, (now - t0) / duration);
+    Object.keys(targets).forEach(k=>{
+      state.asset[k] = startVals[k] + (targets[k] - startVals[k]) * t;
+    });
+    syncAssetSliderUI();
+    if(currentTab === "asset" && state.asset.animation === "none") renderAsset(0);
+    if(t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// duration: 600ms for a direct "Type of data" selection (snappy, deliberate),
+// 2000ms for the periodic real-time auto-refresh (gentler, ambient).
+function mapLiveDataToAsset(shouldTween, duration){
+  if(liveData.price == null) return;
+  const targets = computeLiveTargets();
+  glowSliders(Object.keys(targets).filter(k=>k !== "priceIntensity"));
+  if(shouldTween){
+    tweenAssetTargets(targets, duration || 2000);
+  } else {
+    Object.assign(state.asset, targets);
+    syncAssetSliderUI();
+    if(currentTab === "asset") renderAsset(0);
+  }
+}
+
+/* ============================================================
+   REAL-TIME TRACKING ENGINE
+   "Real-time tracking: Yes" is a single shared toggle driving a 60s poll.
+============================================================ */
+function anyRealtimeOn(){
+  return state.realtime === "yes";
+}
+function updateCountdownUI(){
+  const el = document.getElementById("liveCountdown");
+  if(el) el.textContent = anyRealtimeOn() ? `Next update in: ${countdownRemaining}s` : "";
+}
+function updateRealtimeEngine(){
+  const on = anyRealtimeOn();
+  const badge = document.getElementById("liveBadge");
+  if(badge){
+    badge.classList.toggle("active", on);
+    badge.innerHTML = on
+      ? '<span class="live-status-dot active"></span>LIVE'
+      : '<span class="live-status-dot"></span>STATIC';
+  }
+  const stageDot = document.getElementById("canvasLiveDotStage");
+  const compDot = document.getElementById("canvasLiveDotComp");
+  if(stageDot) stageDot.classList.toggle("active", on);
+  if(compDot) compDot.classList.toggle("active", on);
+  updateLiveHeaderLabel();
+  if(on && !realtimeIntervalId){
+    fetchEthereumData(true);
+    countdownRemaining = 60;
+    updateCountdownUI();
+    realtimeIntervalId = setInterval(()=>{ fetchEthereumData(true); countdownRemaining = 60; }, 60000);
+    countdownIntervalId = setInterval(()=>{ countdownRemaining = Math.max(0, countdownRemaining-1); updateCountdownUI(); }, 1000);
+  } else if(!on && realtimeIntervalId){
+    clearInterval(realtimeIntervalId); realtimeIntervalId = null;
+    clearInterval(countdownIntervalId); countdownIntervalId = null;
+    updateCountdownUI();
+  }
+}
+
+/* ============================================================
+   SEED SYSTEM — encodes/restores the full control state as base64 JSON
+============================================================ */
+function encodeSeedFull(){
+  return btoa(JSON.stringify(state));
+}
+function shortSeedFromFull(b64){
+  const clean = b64.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  return "ETH-" + clean.slice(0, 8);
+}
+function updateSeedDisplay(){
+  const full = encodeSeedFull();
+  const el = document.getElementById("seedDisplay");
+  if(!el) return;
+  el.textContent = shortSeedFromFull(full);
+  el.dataset.full = full;
+}
+function flashButton(btn, text, revertMs){
+  const original = btn.textContent;
+  btn.textContent = text;
+  setTimeout(()=>{ btn.textContent = original; }, revertMs || 1200);
+}
+function copySeed(btn){
+  const full = document.getElementById("seedDisplay").dataset.full || encodeSeedFull();
+  navigator.clipboard.writeText(full).then(()=>flashButton(btn, "Copied!")).catch(()=>{});
+}
+function copySeedLink(btn){
+  const full = document.getElementById("seedDisplay").dataset.full || encodeSeedFull();
+  const url = `${location.origin}${location.pathname}?seed=${encodeURIComponent(full)}`;
+  navigator.clipboard.writeText(url).then(()=>flashButton(btn, "Copied!")).catch(()=>{});
+}
+function loadSeed(b64){
+  try{
+    const parsed = JSON.parse(atob(b64));
+    const merged = JSON.parse(JSON.stringify(defaults));
+    ["asset","icons","comp"].forEach(k=>{ merged[k] = Object.assign({}, defaults[k], parsed[k]||{}); });
+    if(parsed.dataType !== undefined) merged.dataType = parsed.dataType;
+    if(parsed.realtime !== undefined) merged.realtime = parsed.realtime;
+    state = merged;
+    syncUIFromState();
+    updateSeedDisplay();
+    render();
+  }catch(e){
+    console.warn("Invalid seed:", e);
+  }
+}
+
+/* ============================================================
+   PREVIEW BACKGROUND (UI-only — never affects the exported alpha)
+============================================================ */
+function updateStageBackground(){
+  const tabState = state[currentTab];
+  if(!tabState) return;
+  const val = tabState.previewBg || "black";
+  const target = currentTab === "composition"
+    ? document.getElementById("compositionWrap")
+    : document.querySelector(".stage");
+  target.classList.remove("bg-black","bg-white","bg-checkerboard");
+  if(val === "black") target.classList.add("bg-black");
+  else if(val === "white") target.classList.add("bg-white");
+  else target.classList.add("bg-checkerboard");
+}
+
+/* ============================================================
+   RENDER DISPATCH
+============================================================ */
+function render(){
+  updateStageBackground();
+  updateRealtimeEngine();
+  updateSeedDisplay();
+  if(currentTab === "asset"){
+    stopAnimation();
+    if(state.asset.animation !== "none"){
+      startAssetAnimation();
+    } else {
+      renderAsset(0);
+    }
+  } else if(currentTab === "icons"){
+    renderIcons();
+  } else if(currentTab === "composition"){
+    buildMosaic();
+  }
+}
+
+/* ============================================================
+   EXPORT — PNG at 1x/2x/4x, SVG, and CSS custom properties
+============================================================ */
+function downloadCanvasPNG(canvas, filename){
+  canvas.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+function downloadTextFile(content, filename, mime){
+  const blob = new Blob([content], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildCompositionCanvas(scale){
+  const mosaic = document.getElementById("mosaicGrid");
+  const rect = mosaic.getBoundingClientRect();
+  const canvas = document.createElement("canvas");
+  canvas.width = rect.width * scale;
+  canvas.height = rect.height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  // Export always preserves transparency — the preview background is UI-only.
+  Array.from(mosaic.children).forEach(child=>{
+    const cRect = child.getBoundingClientRect();
+    const x = cRect.left - rect.left;
+    const y = cRect.top - rect.top;
+    if(child.classList.contains("pill")){
+      ctx.strokeStyle = state.comp.elColor;
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, x, y, cRect.width, cRect.height, cRect.height/2);
+      ctx.stroke();
+      ctx.fillStyle = state.comp.elColor;
+      ctx.font = "14px 'Space Grotesk', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(child.textContent, x + cRect.width/2, y + cRect.height/2);
+    } else {
+      const innerCanvas = child.querySelector("canvas");
+      if(innerCanvas){
+        ctx.drawImage(innerCanvas, x, y, cRect.width, cRect.height);
+      }
+    }
+  });
+  return canvas;
+}
+function downloadComposition(scale){
+  const canvas = buildCompositionCanvas(scale || 2);
+  canvas.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eth-composition-${scale||2}x.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+function exportPNG(scale){
+  if(currentTab === "asset"){
+    const temp = document.createElement("canvas");
+    temp.width = 640*scale; temp.height = 640*scale;
+    const tctx = temp.getContext("2d");
+    tctx.scale(scale, scale);
+    drawAssetScene(tctx, 640, 640, lastAssetTime);
+    downloadCanvasPNG(temp, `eth-asset-${scale}x.png`);
+  } else if(currentTab === "icons"){
+    const temp = document.createElement("canvas");
+    temp.width = 640*scale; temp.height = 640*scale;
+    const tctx = temp.getContext("2d");
+    tctx.scale(scale, scale);
+    drawIconsScene(tctx, 640, 640);
+    downloadCanvasPNG(temp, `eth-icons-${scale}x.png`);
+  } else if(currentTab === "composition"){
+    downloadComposition(scale);
+  }
+}
+
+function shapeToSVGElement(type, x, y, size, rotation, color){
+  const transform = `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${rotation.toFixed(1)})`;
+  switch(type){
+    case "dots": return `<circle cx="0" cy="0" r="${(size/2).toFixed(2)}" fill="${color}" transform="${transform}"/>`;
+    case "circles": return `<circle cx="0" cy="0" r="${(size/2).toFixed(2)}" fill="none" stroke="${color}" stroke-width="1.2" transform="${transform}"/>`;
+    case "squares": return `<rect x="${(-size/2).toFixed(2)}" y="${(-size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" fill="none" stroke="${color}" stroke-width="1.2" transform="${transform}"/>`;
+    case "lines": return `<line x1="${(-size).toFixed(2)}" y1="0" x2="${size.toFixed(2)}" y2="0" stroke="${color}" stroke-width="1.2" transform="${transform}"/>`;
+    case "triangles": return `<polygon points="0,${(-size/1.5).toFixed(2)} ${(size/1.5).toFixed(2)},${(size/2).toFixed(2)} ${(-size/1.5).toFixed(2)},${(size/2).toFixed(2)}" fill="none" stroke="${color}" stroke-width="1.2" transform="${transform}"/>`;
+    case "cross": return `<g transform="${transform}"><line x1="${(-size/2).toFixed(2)}" y1="0" x2="${(size/2).toFixed(2)}" y2="0" stroke="${color}" stroke-width="1.2"/><line x1="0" y1="${(-size/2).toFixed(2)}" x2="0" y2="${(size/2).toFixed(2)}" stroke="${color}" stroke-width="1.2"/></g>`;
+    default: return "";
+  }
+}
+
+// True vector reconstruction for the Asset tab (we have structured particle
+// geometry to work with). Icons/Composition fall back to a canvas-embedded
+// <image> inside a valid SVG wrapper — still a real .svg file, just raster inside.
+function assetToSVGString(){
+  const s = state.asset;
+  const cssW = 640, cssH = 640;
+  const cx = cssW/2, cy = cssH/2, w = ASSET_DIAMOND.w, h = ASSET_DIAMOND.h;
+  const g = diamondGeometry(cx, cy, w, h);
+  const particles = particleCache.asset || buildAssetParticles();
+  let shapesSVG = "";
+  particles.forEach((pt)=>{
+    const x = pt.x - ASSET_DIAMOND.cx + cx;
+    const y = pt.y - ASSET_DIAMOND.cy + cy;
+    const shapeType = s.shape === "mixed" ? pt.shapeVariant : s.shape;
+    shapesSVG += shapeToSVGElement(shapeType, x, y, pt.baseSize, s.rotation, s.shapeColor);
+  });
+  const clipD = `M ${g.top.x} ${g.top.y} L ${g.right.x} ${g.right.y} L ${g.bottom.x} ${g.bottom.y} L ${g.left.x} ${g.left.y} Z`;
+  const upperD = `M ${g.top.x} ${g.top.y} L ${g.right.x} ${g.right.y} L ${g.left.x} ${g.left.y} Z`;
+  const lowerD = `M ${g.left.x} ${g.left.y} L ${g.right.x} ${g.right.y} L ${g.bottom.x} ${g.bottom.y} Z`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cssW} ${cssH}" width="${cssW}" height="${cssH}">
+<defs><clipPath id="diamondClip"><path d="${clipD}"/></clipPath></defs>
+<g clip-path="url(#diamondClip)">${shapesSVG}</g>
+<path d="${upperD}" fill="rgba(255,255,255,0.02)" stroke="#FFFFFF" stroke-width="1.5"/>
+<path d="${lowerD}" fill="rgba(255,255,255,0.04)" stroke="#FFFFFF" stroke-width="1.5"/>
+<line x1="${g.left.x}" y1="${g.left.y}" x2="${g.right.x}" y2="${g.right.y}" stroke="#FFFFFF" stroke-width="0.8"/>
+<line x1="${g.top.x}" y1="${g.top.y}" x2="${g.bottom.x}" y2="${g.bottom.y}" stroke="#FFFFFF" stroke-width="0.8"/>
+</svg>`;
+}
+
+function exportSVG(){
+  if(currentTab === "asset"){
+    downloadTextFile(assetToSVGString(), "eth-asset.svg", "image/svg+xml");
+  } else if(currentTab === "icons"){
+    const dataUrl = iconsCanvas.toDataURL("image/png");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640"><image href="${dataUrl}" width="640" height="640"/></svg>`;
+    downloadTextFile(svg, "eth-icons.svg", "image/svg+xml");
+  } else if(currentTab === "composition"){
+    const canvas = buildCompositionCanvas(2);
+    const dataUrl = canvas.toDataURL("image/png");
+    const w = canvas.width/2, h = canvas.height/2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><image href="${dataUrl}" width="${w}" height="${h}"/></svg>`;
+    downloadTextFile(svg, "eth-composition.svg", "image/svg+xml");
+  }
+}
+
+function exportCSSVars(btn){
+  let vars;
+  if(currentTab === "asset"){
+    const s = state.asset;
+    vars = `:root {\n  --eth-shape-color: ${s.shapeColor};\n  --eth-dot-count: ${s.amount};\n  --eth-dot-size: ${s.size};\n  --eth-spacing: ${s.spacing};\n  --eth-rotation: ${s.rotation}deg;\n  --eth-animation: "${s.animation}";\n  --eth-animation-speed: ${s.speed};\n  --eth-flow: ${s.flow};\n  --eth-shape-type: "${s.shape}";\n  --eth-price-intensity: ${s.priceIntensity};\n}`;
+  } else if(currentTab === "icons"){
+    const s = state.icons;
+    vars = `:root {\n  --eth-icon-inner-color: ${s.innerColor};\n  --eth-icon-outer-color: ${s.outerColor};\n  --eth-icon-amount: ${s.amount};\n  --eth-icon-spacing: ${s.spacing};\n  --eth-icon-rotation: ${s.rotation}deg;\n  --eth-icon-thickness: ${s.thickness};\n  --eth-icon-shape: "${s.shape}";\n  --eth-icon-style: "${s.style}";\n}`;
+  } else {
+    const s = state.comp;
+    vars = `:root {\n  --eth-elements-color: ${s.elColor};\n  --eth-elements-amount: ${s.amount};\n  --eth-elements-spacing: ${s.spacing};\n  --eth-elements-rotation: ${s.rotation}deg;\n  --eth-elements-style: "${s.elStyle}";\n}`;
+  }
+  navigator.clipboard.writeText(vars).then(()=>{ if(btn) flashButton(btn, "Copied!"); }).catch(()=>{});
+}
+
+function handleExport(type, btn){
+  if(type === "png1") exportPNG(1);
+  else if(type === "png2") exportPNG(2);
+  else if(type === "png4") exportPNG(4);
+  else if(type === "svg") exportSVG();
+  else if(type === "css") exportCSSVars(btn);
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+function init(){
+  initBindings();
+  const urlSeed = new URLSearchParams(location.search).get("seed");
+  if(urlSeed){
+    loadSeed(urlSeed);
+  } else {
+    syncUIFromState();
+  }
+  render();
+  fetchEthereumData(false);
+}
+
+document.addEventListener("DOMContentLoaded", init);
+
+window.addEventListener("resize", ()=>{
+  if(currentTab === "icons") renderIcons();
+  if(currentTab === "asset" && state.asset.animation === "none") renderAsset(0);
+});
+
+})();
+</script>
+</body>
+</html>
