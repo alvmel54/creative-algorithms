@@ -1,0 +1,30 @@
+.row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+
+.dot {
+  background: #22c55e;
+  border-radius: 999px;
+  height: 8px;
+  transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+  width: 8px;
+}
+
+.dotDim {
+  opacity: 0.35;
+  transform: scale(0.72);
+}
+
+.label {
+  color: var(--muted-foreground, #9a9aa5);
+  font-size: 12px;
+}
+
+.formValues {
+  display: block;
+  font-size: 11px;
+  opacity: 0.8;
+}
