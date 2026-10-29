@@ -175,6 +175,26 @@ function syncEthGlassHull(root: THREE.Object3D, camera: THREE.PerspectiveCamera)
   ethModelFrameUniforms.uGlassHullInradius.value = Number.isFinite(inradius) ? Math.max(0.005, inradius) : 0.1;
 }
 
+/** The last synced silhouette hull's bounds in canvas uv (0..1, y up), or
+ * null without a hull. Read right after a render to know where the gem
+ * landed (the Diamond export's Trim to mark). */
+export function getEthGlassHullBounds(): { maxU: number; maxV: number; minU: number; minV: number } | null {
+  const count = ethModelFrameUniforms.uGlassHullCount.value as number;
+
+  if (count < 3) {
+    return null;
+  }
+
+  const points = (ethModelFrameUniforms.uGlassHull.value as THREE.Vector2[]).slice(0, count);
+
+  return {
+    maxU: Math.max(...points.map((point) => point.x)),
+    maxV: Math.max(...points.map((point) => point.y)),
+    minU: Math.min(...points.map((point) => point.x)),
+    minV: Math.min(...points.map((point) => point.y)),
+  };
+}
+
 /** Call every frame before the facet passes. Reads `root`'s current world
  * transform (Shape rotation), the model-space bounds of its visible meshes,
  * and the camera distance, so `uModelToScreen` maps model units to the same

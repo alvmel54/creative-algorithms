@@ -2,7 +2,7 @@
  * Custom `postprocessing` Effect that reads the lit 3D render (already shaded
  * by the scene's directional light against the GLB mesh normals) and
  * thresholds it into the same halftone/dithering vocabulary as the 2D
- * renderer (`eth-diamond-shading.ts` / `eth-diamond-draw.ts`): a screen-space
+ * renderer (`eth-diamond-shading.ts`): a screen-space
  * grid of shapes (dot/circle/square/triangle/line/cross/mixed) whose size is
  * driven by per-pixel luminance (darker = larger mark, mirroring the 2D
  * "darkness" size curve), with density/size mapped from the same
@@ -20,12 +20,11 @@ import { CanvasTexture, Texture, Uniform, Vector2, Vector3 } from "three";
 import { ETH_FINGERPRINT_SAMPLES } from "./eth-data-feed";
 import { ethModelFrameUniforms } from "./eth-diamond-3d-facets";
 import type { EthGlass } from "./eth-glass";
-import { drawEthTypography, type EthTypographyRender } from "./eth-typography";
+import { drawEthTypographyMask, type EthTypographyRender } from "./eth-typography";
 import { ETH_GRADIENT_MAX_STOPS, getEthGradientBreath, type EthBackgroundGradient } from "./eth-background-gradient";
 import {
   computeDiamondGeometry,
   getCyclesPerLoop,
-  getDitherCellSpacing,
   type EthAnimationMode,
   type EthMilestoneRender,
   type EthShapeType,
@@ -100,6 +99,8 @@ const fragmentShader = /* glsl */ `
   uniform float uGlassTint;
   uniform float uGlassRim;
   uniform float uGlassGlow;
+  uniform float uGlassBody;
+  uniform float uShowMarks;
   uniform vec2 uGlassHull[16];
   uniform int uGlassHullCount;
   uniform vec2 uGlassHullCenter;
@@ -133,8 +134,14 @@ const fragmentShader = /* glsl */ `
   uniform float uGemMilestoneFront;
   uniform float uGemMilestoneStrength;
   uniform vec3 uMilestoneColor;
-  uniform sampler2D tTypography;
-  uniform float uTypographyOn;
+  // Story letters (2026-10-28): a text mask (red = current headline, green =
+  // the one being swept away) and the sweep front in half gem heights (< 0
+  // while the text is held). The letters are drawn below from the Field's
+  // own marks.
+  uniform sampler2D tTextMask;
+  uniform float uTextOn;
+  uniform float uTextSweep;
+  uniform vec3 uTextColor;
   uniform float uFingerprint[${ETH_FINGERPRINT_SAMPLES}];
   uniform float uFingerprintOn;
   uniform float uHoverOn;
@@ -285,13 +292,23 @@ const fragmentShader = /* glsl */ `
   // following the flow field in coordinates normalized to the diamond. Marks
   // travel along it, grow in and out at the ends, turn with the stream and
   // fade toward the edges. Position is in canvas-height units, y down.
-  // Returns (mask, ring, ring color, Color B pick of the strongest mark).
   // One pixel in canvas-height units, set at the top of mainImage. The Field
   // is evaluated inside dynamic loops and branches (Glass, Frost), where
   // derivatives are undefined and made the compiler unroll.
   float ethPixel;
 
-  vec4 ethBackgroundField(vec2 uv) {
+  struct EthField {
+    float mark;      // strongest field mark
+    float ring;      // milestone ring on the marks
+    float ringColor; // its Accent share
+    float pickB;     // Color B pick of the strongest mark
+    float textNew;   // current headline's letter marks (alpha)
+    float textOld;   // swept-away headline's letter marks (alpha)
+    float textEdge;  // whiteness right at the sweep front
+    float textArea;  // how much of this pixel is lit text (hides the field)
+  };
+
+  EthField ethBackgroundField(vec2 uv) {
     // Field density: more marks per row than the gem's grid, smaller marks.
     float cell = max(uCellSize / uFieldDensity, 1.0 / 100.0);
     vec2 pos = vec2(uv.x * uAspect, 1.0 - uv.y);
@@ -309,6 +326,15 @@ const fragmentShader = /* glsl */ `
     float ringBest = 0.0;
     float ringColor = 0.0;
     float pickB = 0.0;
+    // Story letters: the same marks, 1.5 / 0.8 larger, kept only inside the
+    // text (masked per pixel below, so the letter edges stay crisp).
+    vec2 textMask = uTextOn > 0.5 ? textureLod(tTextMask, uv, 0.0).rg : vec2(0.0);
+    bool lettersHere = textMask.r > 0.004 || textMask.g > 0.004;
+    float textNew = 0.0;
+    float textOld = 0.0;
+    float textEdge = 0.0;
+    float newReached = 0.0;
+    float oldLeft = 0.0;
 
     for (int dy = -uCellReach; dy <= uCellReach; dy++) {
       for (int dx = -uCellReach; dx <= uCellReach; dx++) {
@@ -332,7 +358,9 @@ const fragmentShader = /* glsl */ `
         // Ring tied to the pattern: this mark's stream and ignition delay.
         vec2 outward = center - uFieldCenter;
         float outLength = max(length(outward), 0.00001);
-        float band = ethMilestoneBand(ethWaveRadius(outLength / (uFieldSize.y * 0.5), dot(d, outward / outLength), ethHash(key, 14)));
+        float waveRadius = ethWaveRadius(outLength / (uFieldSize.y * 0.5), dot(d, outward / outLength), ethHash(key, 14));
+        float band = ethMilestoneBand(waveRadius);
+        float life = smoothstep(0.0, 0.1, s) * smoothstep(1.0, 0.9, s);
         size *= 1.0 + 0.55 * band;
         vec2 p = pos - (center + d * cell * 0.45 * (s - 0.5));
         int shape = uMixed > 0.5 ? int(floor(ethHash(key, 13) * 7.0)) % 7 : uShapeType;
@@ -340,20 +368,49 @@ const fragmentShader = /* glsl */ `
           ? vec2(dot(p, d), dot(p, vec2(-d.y, d.x)))
           : vec2(dot(p, vec2(-d.y, d.x)), -dot(p, d));
         vec2 pr = vec2(aligned.x * ur - aligned.y * us, aligned.x * us + aligned.y * ur);
-        float m = size <= 0.0005 ? 0.0 : ethShapeMask(shape, pr, size, pixel);
-        if (m * falloff > best) {
-          best = m * falloff;
-          // Same A/B share as the gem's marks.
-          pickB = step(1.0 - uColorBShare, ethHash(key, 15));
-        }
-        if (m * band > ringBest) {
-          ringBest = m * band;
-          ringColor = band;
+        // One call site for the shape mask: pass 0 is the field mark, pass 1
+        // (only where the text is) the letter mark, 1.5 / 0.8 larger. Two
+        // call sites doubled the inlined shape code and the shader took
+        // about 4 s to compile instead of 1.5 s.
+        int passes = lettersHere ? 2 : 1;
+        for (int pass = 0; pass < passes; pass++) {
+          float passSize = pass == 0 ? size : markSize * 1.875 * life;
+          float m = passSize <= 0.0005 ? 0.0 : ethShapeMask(shape, pr, passSize, pixel);
+          if (pass == 0) {
+            if (m * falloff > best) {
+              best = m * falloff;
+              // Same A/B share as the gem's marks.
+              pickB = step(1.0 - uColorBShare, ethHash(key, 15));
+            }
+            if (m * band > ringBest) {
+              ringBest = m * band;
+              ringColor = band;
+            }
+          } else {
+            // Held text: 0.9. A sweep reveals the new text behind its front
+            // (whiter right at the front) and clears the old one, mark by
+            // mark, as the canvas letters did.
+            float reached = uTextSweep < 0.0 ? 1.0 : smoothstep(uTextSweep + 0.12, uTextSweep - 0.12, waveRadius);
+            float edge = uTextSweep < 0.0 ? 0.0 : max(0.0, 1.0 - abs(waveRadius - uTextSweep) / 0.3);
+            float newAlpha = m * min(1.0, 0.9 + edge * 0.1) * reached;
+            if (newAlpha > textNew) {
+              textNew = newAlpha;
+              textEdge = edge;
+            }
+            textOld = max(textOld, m * 0.9 * (1.0 - reached));
+            newReached = max(newReached, reached);
+            oldLeft = max(oldLeft, 1.0 - reached);
+          }
         }
       }
     }
 
-    return vec4(best, ringBest, ringColor, pickB);
+    // Inside lit letters the field marks step aside, like the canvas letters
+    // drawn over them: the same lattice would otherwise nest each field mark
+    // inside its larger letter mark.
+    float textArea = max(textMask.r * newReached, textMask.g * oldLeft);
+
+    return EthField(best, ringBest, ringColor, pickB, textNew * textMask.r, textOld * textMask.g, textEdge, textArea);
   }
 
   // Gradient background (blueprint 2026-10-08), same math as
@@ -391,12 +448,15 @@ const fragmentShader = /* glsl */ `
   // by the mesh: 1 outside it and for glass samples) and the typography.
   vec3 ethBackgroundGamma(vec2 p, float cover) {
     // The field is part of the background: only with Include on.
-    vec4 fieldSample = uFieldStrength > 0.0 && uIncludeBackground > 0.5 && cover > 0.001
-      ? ethBackgroundField(p)
-      : vec4(0.0);
+    // (No ?: here: WebGL does not allow the ternary on structures.)
+    EthField fieldSample = EthField(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    if ((uFieldStrength > 0.0 || uTextOn > 0.5) && uIncludeBackground > 0.5 && cover > 0.001) {
+      fieldSample = ethBackgroundField(p);
+    }
     // A milestone ring adds opacity and its color to the field marks it
     // crosses.
-    float field = min(1.0, fieldSample.x * cover * uFieldStrength + fieldSample.y * cover * 0.5);
+    float field = min(1.0, fieldSample.mark * cover * uFieldStrength + fieldSample.ring * cover * 0.5)
+      * (1.0 - fieldSample.textArea * uTypographyOpacity);
     // Blend in gamma space like the 2D canvas; a linear-space mix made the
     // same Strength read much brighter in 3D.
     vec3 baseGamma = pow(uBackgroundColor, vec3(1.0 / 2.2));
@@ -408,14 +468,15 @@ const fragmentShader = /* glsl */ `
     // The field takes the gem's colors: A or B per mark, or the gradient
     // (Color A at the top, like the 2D renderer).
     vec3 gradientAt = mix(uColorA, uColorB, clamp(1.0 - p.y + uColorBShare - 0.5, 0.0, 1.0));
-    vec3 fieldMarkColor = uColorGradient > 0.5 ? gradientAt : mix(uColorA, uColorB, fieldSample.w);
-    vec3 fieldColorGamma = mix(pow(fieldMarkColor, vec3(1.0 / 2.2)), pow(uMilestoneColor, vec3(1.0 / 2.2)), fieldSample.z);
+    vec3 fieldMarkColor = uColorGradient > 0.5 ? gradientAt : mix(uColorA, uColorB, fieldSample.pickB);
+    vec3 fieldColorGamma = mix(pow(fieldMarkColor, vec3(1.0 / 2.2)), pow(uMilestoneColor, vec3(1.0 / 2.2)), fieldSample.ringColor);
     vec3 backgroundGamma = mix(baseGamma, fieldColorGamma, field);
-    if (uTypographyOn > 0.5 && uIncludeBackground > 0.5) {
-      // Big typography over the field, behind the mesh (drawn by
-      // drawEthTypography into tTypography; canvas colors are gamma).
-      vec4 typography = textureLod(tTypography, p, 0.0);
-      backgroundGamma = mix(backgroundGamma, typography.rgb, typography.a * cover * uTypographyOpacity);
+    if (uTextOn > 0.5 && uIncludeBackground > 0.5) {
+      // The Story letters over the field, behind the mesh: the old text
+      // first, then the new one over it, in the Accent (gamma).
+      float fade = cover * uTypographyOpacity;
+      backgroundGamma = mix(backgroundGamma, uTextColor, fieldSample.textOld * fade);
+      backgroundGamma = mix(backgroundGamma, mix(uTextColor, vec3(1.0), fieldSample.textEdge * 0.5), fieldSample.textNew * fade);
     }
     return backgroundGamma;
   }
@@ -454,8 +515,6 @@ const fragmentShader = /* glsl */ `
     // Pattern seed (Type of data + Shuffle) offsets every hash, so a new seed
     // re-deals grid offsets, jitter, per-facet rotation, colors and Mixed shapes.
     float facetSeed = ethHash(facetKey, 1);
-    vec3 worldNormal = normalize(uModelToWorldRot * facetNormal);
-    float facetLight = clamp(dot(worldNormal, uLightDir) * 0.5 + 0.5, 0.0, 1.0);
 
     // The mark grid lives on the facet's own plane: an orthonormal basis
     // (tangent pointing along the facet, bitangent "up" the facet) projects
@@ -468,7 +527,10 @@ const fragmentShader = /* glsl */ `
     vec2 facetCoord = vec2(dot(modelPos, facetTangent), dot(modelPos, facetBitangent)) * uModelToScreen;
     float facetDepth = dot(modelPos, facetNormal);
 
-    float cellSize = uCellSize * mix(0.8, 1.25, 1.0 - facetLight);
+    // Same grid and mark size on every facet (2026-10-28): spacing and size
+    // used to follow each facet's light, so the darker lower facets (the
+    // pavilion) read about 1.4x emptier than the crown even with no data.
+    float cellSize = uCellSize;
     vec2 facetGridOffset = vec2(facetSeed, ethHash(facetKey, 7)) * cellSize;
     float twoPiCycles = uGemLoopProgress * uCycles * 6.28318530718;
 
@@ -493,9 +555,8 @@ const fragmentShader = /* glsl */ `
     float cr = cos(facetRotation);
     float sr = sin(facetRotation);
 
-    float luminance = dot(inputColor.rgb, vec3(0.299, 0.587, 0.114));
-    float darkness = clamp(1.0 - luminance, 0.0, 1.0);
-    float baseSize = uMaxSize * (0.75 + 0.25 * darkness) * mix(0.85, 1.15, facetLight);
+    // About the old average of the light-driven size (0.75-1.15).
+    float baseSize = uMaxSize * 0.95;
 
     // Edge softness of one real pixel, in facet-grid units. A fixed width was
     // as wide as a small mark, so most mark pixels never reached full opacity
@@ -531,7 +592,9 @@ const fragmentShader = /* glsl */ `
     // Marks only where the mesh covers the pixel (they are clipped by its
     // alpha below): most of the frame is background, and running the
     // 9-cell loop there was most of the shader's cost.
-    if (inputColor.a > 0.001) {
+    // Diamond > Pattern off: no marks on the gem, only the outline (and the
+    // glass), and the mark loop is skipped.
+    if (inputColor.a > 0.001 && uShowMarks > 0.5) {
       for (int dy = -uCellReach; dy <= uCellReach; dy++) {
         for (int dx = -uCellReach; dx <= uCellReach; dx++) {
           vec2 cell = baseCell + vec2(float(dx), float(dy));
@@ -747,7 +810,9 @@ const fragmentShader = /* glsl */ `
         float angle = float(k - 2) * 1.5707963 + 0.785398;
         samplePoint += vec2(cos(angle) / uAspect, sin(angle)) * frostRadius;
       }
-      vec3 sampled = ethBackgroundGamma(samplePoint, k == 0 ? 1.0 - inputColor.a : 1.0);
+      // Pattern off: the gem has no marks to cover the background, so it
+      // shows through (only the outline, and the glass if on, remain).
+      vec3 sampled = ethBackgroundGamma(samplePoint, k == 0 ? 1.0 - inputColor.a * uShowMarks : 1.0);
       if (k == 0) {
         backgroundGamma = sampled;
       } else if (k == 1) {
@@ -824,10 +889,12 @@ const fragmentShader = /* glsl */ `
       if (uIncludeBackground > 0.5) {
         baseRgb = mix(baseRgb, glassRgb, glassCover);
       } else {
-        // Nothing behind to refract: the veil and the light.
+        // Nothing behind to refract: the veil and the light. Without the
+        // body (the Diamond export) only the edge light stays: the 0.35
+        // floor read as a gray veil on light backgrounds.
         vec3 lit = veil * uGlassTint + edgeLight;
         baseRgb = pow(clamp(lit, 0.0, 1.0), vec3(2.2));
-        outAlpha = max(mask, glassCover * clamp(0.35 + max(max(edgeLight.r, edgeLight.g), edgeLight.b), 0.0, 1.0));
+        outAlpha = max(mask, glassCover * clamp(0.35 * uGlassBody + max(max(edgeLight.r, edgeLight.g), edgeLight.b), 0.0, 1.0));
       }
     }
 
@@ -872,6 +939,10 @@ export type EthDitherEffectParams = {
   speed: number;
   /** Glass material (3D), or null when off. */
   glass: EthGlass | null;
+  /** Without a background: false keeps only the glass's edge light. */
+  glassBody: boolean;
+  /** The diamond's mark pattern; false leaves only the outline (and glass). */
+  showMarks: boolean;
   typography: EthTypographyRender | null;
   variationDeg: number;
   width: number;
@@ -915,6 +986,14 @@ function srgbToLinear(channel: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
+/** A hex color as 0..1 gamma (sRGB) channels, for colors the shader blends
+ * in gamma space. */
+function hexToGamma(hex: string): [number, number, number] {
+  const value = Number.parseInt(hex.replace("#", "").padEnd(6, "0").slice(0, 6), 16);
+
+  return Number.isNaN(value) ? [1, 1, 1] : [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+}
+
 export function buildDitherEffectParams(input: {
   amount: number;
   animation: EthAnimationMode;
@@ -943,6 +1022,8 @@ export function buildDitherEffectParams(input: {
   spacing: number;
   speed: number;
   glass?: EthGlass | null;
+  glassBody?: boolean;
+  showMarks?: boolean;
   typography?: EthTypographyRender | null;
   variationDeg: number;
   width: number;
@@ -974,6 +1055,8 @@ export function buildDitherEffectParams(input: {
     shapeType: input.shapeType,
     sizeVariation: input.sizeVariation ?? 0,
     glass: input.glass ?? null,
+    glassBody: input.glassBody ?? true,
+    showMarks: input.showMarks ?? true,
     spacing: input.spacing,
     speed: input.speed,
     variationDeg: input.variationDeg,
@@ -1033,6 +1116,8 @@ export class EthDitherEffect extends Effect {
         ["uGlassTint", new Uniform(0.25)],
         ["uGlassRim", new Uniform(0.7)],
         ["uGlassGlow", new Uniform(0.4)],
+        ["uGlassBody", new Uniform(1)],
+        ["uShowMarks", new Uniform(1)],
         ["uGlassHull", ethModelFrameUniforms.uGlassHull],
         ["uGlassHullCount", ethModelFrameUniforms.uGlassHullCount],
         ["uGlassHullCenter", ethModelFrameUniforms.uGlassHullCenter],
@@ -1063,8 +1148,10 @@ export class EthDitherEffect extends Effect {
         ["uGemMilestoneStrength", new Uniform(0)],
         ["uMilestoneStrength", new Uniform(0)],
         ["uMilestoneColor", new Uniform(new Vector3(1, 0.79, 0.3))],
-        ["tTypography", new Uniform(null)],
-        ["uTypographyOn", new Uniform(0)],
+        ["tTextMask", new Uniform(null)],
+        ["uTextOn", new Uniform(0)],
+        ["uTextSweep", new Uniform(-1)],
+        ["uTextColor", new Uniform(new Vector3(1, 0.79, 0.3))],
         ["uFingerprint", new Uniform(new Float32Array(ETH_FINGERPRINT_SAMPLES))],
         ["uFingerprintOn", new Uniform(0)],
         ["uHoverOn", new Uniform(0)],
@@ -1077,71 +1164,71 @@ export class EthDitherEffect extends Effect {
     this.updateParams(params);
   }
 
-  /** Canvas the big typography is drawn into (full color, gamma), created
-   * on first use and uploaded each frame it shows. */
-  private labelCanvas: HTMLCanvasElement | null = null;
-  private labelTexture: CanvasTexture | null = null;
+  /** The Story's text mask (drawEthTypographyMask), redrawn and uploaded
+   * only when the headlines or the canvas size change. A new texture on a
+   * size change: three allocates a texture's storage once, so a 1920x1080
+   * texture kept its size after the canvas became 1080x1080 and the letters
+   * were squeezed into its left part, next to stale text (2026-10-28). */
+  private textCanvas: HTMLCanvasElement | null = null;
+  private textTexture: CanvasTexture | null = null;
+  private textKey = "";
 
   private updateTypography(params: EthDitherEffectParams): void {
-    const typography = params.typography;
-    const on = Boolean(typography) && params.includeBackground;
+    const milestone = params.typography?.milestone ?? null;
+    const on = Boolean(milestone) && params.includeBackground;
 
-    this.uniforms.get("uTypographyOn")!.value = on ? 1 : 0;
-    this.uniforms.get("uTypographyOpacity")!.value = typography?.opacity ?? 1;
+    this.uniforms.get("uTextOn")!.value = on ? 1 : 0;
+    this.uniforms.get("uTypographyOpacity")!.value = params.typography?.opacity ?? 1;
 
-    if (!on) {
+    if (!on || !milestone) {
       return;
     }
 
+    this.uniforms.get("uTextSweep")!.value = milestone.sweep ?? -1;
+    (this.uniforms.get("uTextColor")!.value as Vector3).set(...hexToGamma(milestone.color));
+
     const width = Math.max(1, Math.round(params.width));
     const height = Math.max(1, Math.round(params.height));
+    const previous = milestone.sweep !== null ? milestone.previous : null;
+    const key = [
+      width,
+      height,
+      milestone.current.title,
+      milestone.current.subtitle,
+      previous?.title ?? "",
+      previous?.subtitle ?? "",
+    ].join("|");
 
-    if (!this.labelCanvas) {
-      this.labelCanvas = document.createElement("canvas");
-      this.labelTexture = new CanvasTexture(this.labelCanvas);
-      this.uniforms.get("tTypography")!.value = this.labelTexture;
+    if (key === this.textKey && this.textTexture) {
+      return;
     }
 
-    if (this.labelCanvas.width !== width || this.labelCanvas.height !== height) {
-      this.labelCanvas.width = width;
-      this.labelCanvas.height = height;
+    if (!this.textCanvas) {
+      this.textCanvas = document.createElement("canvas");
     }
 
-    const context = this.labelCanvas.getContext("2d");
+    if (!this.textTexture || this.textCanvas.width !== width || this.textCanvas.height !== height) {
+      this.textCanvas.width = width;
+      this.textCanvas.height = height;
+      this.textTexture?.dispose();
+      this.textTexture = new CanvasTexture(this.textCanvas);
+      this.uniforms.get("tTextMask")!.value = this.textTexture;
+    }
+
+    const context = this.textCanvas.getContext("2d");
 
     if (!context) {
       return;
     }
 
-    const geometry = computeDiamondGeometry(width, height);
-
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.clearRect(0, 0, width, height);
-    drawEthTypography(context, {
+    drawEthTypographyMask(context, {
       cssHeight: height,
       cssWidth: width,
-      // Same pattern as the background field, at this canvas's scale.
-      field: {
-        cellSpacing: getDitherCellSpacing(params.amount, params.spacing, geometry),
-        color: "#ffffff",
-        cssHeight: height,
-        cssWidth: width,
-        dataPulse: params.dataPulse,
-        density: params.fieldDensity,
-        flow: params.flow,
-        geometry,
-        loopProgress: params.loopProgress,
-        maxSize: (params.maxSize * height) / 1080,
-        rotationDeg: params.rotationDeg,
-        shapeType: params.shapeType,
-        speed: params.animation === "none" ? 0 : params.speed,
-        strength: 1,
-      },
-      geometry,
-      markSizeScale: height / 1080,
-      typography: typography!,
+      geometry: computeDiamondGeometry(width, height),
+      milestone: { ...milestone, previous },
     });
-    this.labelTexture!.needsUpdate = true;
+    this.textTexture.needsUpdate = true;
+    this.textKey = key;
   }
 
   private gemHeld = false;
@@ -1162,7 +1249,7 @@ export class EthDitherEffect extends Effect {
   }
 
   override dispose(): void {
-    this.labelTexture?.dispose();
+    this.textTexture?.dispose();
     super.dispose();
   }
 
@@ -1195,6 +1282,8 @@ export class EthDitherEffect extends Effect {
     this.uniforms.get("uGlassTint")!.value = params.glass?.tint ?? 0.25;
     this.uniforms.get("uGlassRim")!.value = params.glass?.rim ?? 0.7;
     this.uniforms.get("uGlassGlow")!.value = params.glass?.glow ?? 0.4;
+    this.uniforms.get("uGlassBody")!.value = params.glassBody ? 1 : 0;
+    this.uniforms.get("uShowMarks")!.value = params.showMarks ? 1 : 0;
     this.uniforms.get("uLoopProgress")!.value = params.loopProgress;
     this.uniforms.get("uDataPulse")!.value = params.dataPulse;
     this.uniforms.get("uSeed")!.value = Math.abs(Math.trunc(params.seed)) % 65536;

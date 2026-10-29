@@ -8,7 +8,7 @@ import type {
 } from "@/toolcraft/runtime/react";
 
 import { describeEthDataMotion, ethDataFeed, resolveEthPeriod, type EthDataPeriod } from "./eth-data-feed";
-import type { EthDataSourceType } from "./eth-diamond-shading";
+import { resolveEthMotionSource, type EthDataSourceType, type EthMotionSource } from "./eth-diamond-shading";
 import styles from "./eth-live-indicator.module.css";
 import { ExportDurationControl } from "./export-duration-control";
 import { IdentityPresetControl } from "./identity-preset-control";
@@ -70,15 +70,22 @@ function LiveTrackingIndicator({ state }: ToolcraftCustomControlRendererProps): 
   );
 }
 
-/** Read-only line in Motion while a data type drives the mark: the motion
- * measured from that data ("Wave · Speed 1.2 · ... — from Gas Price, All
- * time"). A real component: it re-renders when the history loads. */
-function MotionDataStatusLine({ dataSourceType, period }: { dataSourceType: EthDataSourceType; period: EthDataPeriod }): React.JSX.Element {
+/** Read-only line in Motion: where the motion comes from (measured from the
+ * data, or Manual). A real component: it re-renders when the history loads. */
+function MotionDataStatusLine({
+  dataSourceType,
+  period,
+  source,
+}: {
+  dataSourceType: EthDataSourceType;
+  period: EthDataPeriod;
+  source: EthMotionSource;
+}): React.JSX.Element {
   React.useSyncExternalStore(ethDataFeed.subscribe, ethDataFeed.getVersion);
 
   return (
     <div className={styles.row} data-testid="motion-data-status">
-      <span className={styles.label}>{describeEthDataMotion(dataSourceType, period)}</span>
+      <span className={styles.label}>{describeEthDataMotion(dataSourceType, period, source)}</span>
     </div>
   );
 }
@@ -88,6 +95,7 @@ function MotionDataStatus({ state }: ToolcraftCustomControlRendererProps): React
     <MotionDataStatusLine
       dataSourceType={(state.values["dataSource.type"] as EthDataSourceType) ?? "mix"}
       period={resolveEthPeriod(state.values)}
+      source={resolveEthMotionSource(state.values)}
     />
   );
 }

@@ -5,7 +5,8 @@ import * as React from "react";
 import type { ToolcraftCustomControlRendererProps } from "@/toolcraft/runtime/react";
 
 import { ethDataFeed, resolveEthPeriod } from "./eth-data-feed";
-import { getSeedForDataSource, type EthDataSourceType } from "./eth-diamond-shading";
+import { resolveEthMotionSource, type EthDataSourceType } from "./eth-diamond-shading";
+import { ethIdentityPresets, matchEthIdentity } from "./eth-identity-presets";
 
 type EthMotionValues = { animation: string; flow: number; speed: number; variation: number };
 
@@ -39,12 +40,13 @@ function tenths(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** Motion is always visible (blueprint 2026-10-09, Story addendum): with a
- * data type the Animation, Speed, Intensity and Variation controls show the
- * motion measured from the data (None shows Animation None). Editing any of
- * them switches Type of data to Custom with those values, like Identity
- * shows Custom when the look is edited. The pattern seed is carried over so
- * the mark does not reshuffle on that switch. */
+/** Motion is always visible (blueprint 2026-10-09, Story addendum; manual
+ * motion blueprint 2026-10-27). With Source = From data the Animation, Speed,
+ * Intensity and Variation controls show the motion measured from the data
+ * (None shows Animation None). Editing any of them switches Source to Manual
+ * with those values; Type of data, the Story and the pattern stay as they
+ * are. A legacy saved Type of data "custom" becomes Manual plus the
+ * identity's own data (Mix when the look is custom). */
 export function useEthMotionControlsSync({
   dataFeedVersion,
   dispatch,
@@ -55,14 +57,26 @@ export function useEthMotionControlsSync({
   dispatch: ToolcraftCustomControlRendererProps["dispatch"];
   values: Record<string, unknown>;
 }): void {
-  const type = (values["dataSource.type"] as EthDataSourceType) ?? "mix";
+  const rawType = values["dataSource.type"];
+  const type = (rawType as EthDataSourceType) ?? "mix";
+  const source = resolveEthMotionSource(values);
   const period = resolveEthPeriod(values);
   // What this hook last wrote into the controls, for which data; `pending`
   // until the written values come back in state.
   const writtenRef = React.useRef<{ key: string; motion: EthMotionValues; pending: boolean } | null>(null);
 
   React.useEffect(() => {
-    if (type === "custom") {
+    if (rawType === "custom") {
+      const identity = matchEthIdentity(values);
+      const data = ethIdentityPresets.find((preset) => preset.id === identity)?.values["dataSource.type"] ?? "mix";
+
+      writtenRef.current = null;
+      dispatch({ history: "skip", target: "physics.motionSource", type: "controls.setValue", value: "manual" });
+      dispatch({ history: "skip", target: "dataSource.type", type: "controls.setValue", value: data });
+      return;
+    }
+
+    if (source === "manual") {
       writtenRef.current = null;
       return;
     }
@@ -79,15 +93,10 @@ export function useEthMotionControlsSync({
 
       if (!sameMotion(current, written.motion)) {
         writtenRef.current = null;
-        dispatch({
-          target: "dataSource.seed",
-          type: "controls.setValue",
-          value: Number(values["dataSource.seed"] ?? 0) + getSeedForDataSource(type) - getSeedForDataSource("custom"),
-        });
-        dispatch({ target: "dataSource.type", type: "controls.setValue", value: "custom" });
+        dispatch({ target: "physics.motionSource", type: "controls.setValue", value: "manual" });
 
-        // A slider edited under the None data type would stay static: give it
-        // a style. Picking Animation None by hand keeps None.
+        // A slider edited under None would stay static: give it a style.
+        // Picking Animation None by hand keeps None.
         if (current.animation === "none" && written.motion.animation === "none") {
           dispatch({ history: "skip", target: "physics.animation", type: "controls.setValue", value: "flow" });
         }
@@ -125,5 +134,5 @@ export function useEthMotionControlsSync({
         dispatch({ history: "skip", target: motionTargets[name], type: "controls.setValue", value: motion[name] });
       }
     });
-  }, [dataFeedVersion, dispatch, period, type, values]);
+  }, [dataFeedVersion, dispatch, period, rawType, source, type, values]);
 }

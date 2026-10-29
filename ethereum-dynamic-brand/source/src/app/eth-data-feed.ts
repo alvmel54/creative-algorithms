@@ -16,13 +16,15 @@ import {
   getCyclesPerLoop,
   getSeedForDataSource,
   isEthLiveDataOn,
+  resolveEthMotionSource,
   resolveEthPhysicsParams,
   type EthAnimationMode,
   type EthDataSourceType,
+  type EthMotionSource,
   type EthPhysicsParams,
 } from "./eth-diamond-shading";
 
-type EthFeedKind = Exclude<EthDataSourceType, "custom" | "mix" | "none">;
+type EthFeedKind = Exclude<EthDataSourceType, "mix" | "none">;
 /** A data type that moves the mark. */
 type EthDataKind = EthFeedKind | "mix";
 
@@ -44,7 +46,6 @@ const liveRefreshMs: Record<EthFeedKind, number> = {
 };
 
 const dataSourceLabels: Record<EthDataSourceType, string> = {
-  custom: "Custom",
   "eth-price": "ETH Price",
   "gas-price": "Gas Price",
   mix: "Mix",
@@ -66,20 +67,30 @@ const animationLabels: Record<EthAnimationMode, string> = {
 };
 
 /** Read-only line in Motion: where the values below come from, e.g.
- * "Drift, measured from Gas Price over all time. Editing any value makes it
- * Custom."
- * (blueprint 2026-10-09 narrative model, Story addendum). */
-export function describeEthDataMotion(type: EthDataSourceType, period: EthDataPeriod): string {
-  if (type === "none" || type === "custom" || period === "recent") {
+ * "Drift, measured from Gas Price since inception. Editing any value switches
+ * to Manual." (blueprint 2026-10-09 narrative model; manual motion blueprint
+ * 2026-10-27). */
+export function describeEthDataMotion(type: EthDataSourceType, period: EthDataPeriod, source: EthMotionSource): string {
+  if (source === "manual") {
+    return type === "none"
+      ? "Manual motion, with no data. From data keeps the mark still."
+      : "Manual motion. The data and the Story stay on; From data restores the measured motion.";
+  }
+
+  if (type === "none") {
+    return "No data moves the mark. Editing any value switches to Manual.";
+  }
+
+  if (period === "recent") {
     return "";
   }
 
   const profile = ethDataFeed.getMotionProfile(type, period);
-  const source = `${dataSourceLabels[type]} ${motionSpanLabels[period]}`;
+  const span = `${dataSourceLabels[type]} ${motionSpanLabels[period]}`;
 
   return profile
-    ? `${animationLabels[profile.animation]}, measured from ${source}. Editing any value makes it Custom.`
-    : `Measuring ${source}…`;
+    ? `${animationLabels[profile.animation]}, measured from ${span}. Editing any value switches to Manual.`
+    : `Measuring ${span}…`;
 }
 
 const PUBLICNODE_RPC = "https://ethereum-rpc.publicnode.com";
@@ -221,7 +232,7 @@ export function getEthMilestonesFor(type: EthDataSourceType, period: EthDataPeri
     return [];
   }
 
-  if (type === "none" || type === "custom") {
+  if (type === "none") {
     return [];
   }
 
@@ -1020,7 +1031,7 @@ class EthDataFeedStore {
   }
 
   private kindsFor(type: EthDataSourceType): readonly EthFeedKind[] {
-    if (type === "none" || type === "custom") {
+    if (type === "none") {
       return [];
     }
 
@@ -1091,7 +1102,7 @@ class EthDataFeedStore {
    * ending IMPACT_DAYS after it (averages, so noisy daily fees do not
    * decide it). Null until that history has loaded. */
   getMilestoneImpact(milestone: EthMilestone, type: EthDataSourceType, period: EthDataPeriod): EthMilestoneImpact | null {
-    if (period === "recent" || type === "none" || type === "custom") {
+    if (period === "recent" || type === "none") {
       return null;
     }
 
@@ -1173,7 +1184,7 @@ class EthDataFeedStore {
   /** Raw (unnormalized) history of a data type over a period, evenly spaced
    * in time; Mix is the composite index. Null until it loads. */
   getRawHistory(type: EthDataSourceType, period: EthDataPeriod): { history: number[]; simulated: boolean } | null {
-    if (period === "recent" || type === "none" || type === "custom") {
+    if (period === "recent" || type === "none") {
       return null;
     }
 
@@ -1209,7 +1220,7 @@ class EthDataFeedStore {
 
     const raw = this.getRawHistory(type, period);
 
-    if (!raw || type === "none" || type === "custom" || period === "recent") {
+    if (!raw || type === "none" || period === "recent") {
       return null;
     }
 
@@ -1290,7 +1301,7 @@ class EthDataFeedStore {
       return cached;
     }
 
-    if (type === "none" || type === "custom") {
+    if (type === "none") {
       return null;
     }
 
@@ -1354,7 +1365,7 @@ class EthDataFeedStore {
    * ETH_FINGERPRINT_SAMPLES bins from its first day (the gem's base) to
    * today (its tip). Null for None/Custom or until the history loads. */
   getFingerprint(type: EthDataSourceType, period: EthDataPeriod): EthFingerprint | null {
-    if (period === "recent" || type === "none" || type === "custom") {
+    if (period === "recent" || type === "none") {
       return null;
     }
 
@@ -1405,10 +1416,18 @@ export type EthFingerprint = {
   values: number[];
 };
 
+/** Half width, in bins, of the era each bin is compared with: about an
+ * eighth of the period either side (1.4 years since inception, 1.5 months for
+ * the last 12 months). */
+const FINGERPRINT_ERA_BINS = 8;
+
 /** Bins average the history, so daily noise (fees) does not read as
- * texture. A series spanning more than 20x (price since 2015, fees) is
- * square-root scaled: linear left its early years empty, a log scale
- * flattened every peak after the first. */
+ * texture. Each bin's level is relative to its own era (2026-10-28): the log
+ * of its value placed between the lowest and highest bins within
+ * FINGERPRINT_ERA_BINS around it. A level against the whole history left the
+ * early years small (fees and prices grew by orders of magnitude), so the
+ * gem's lower half read empty; now every era shows its own peaks and lows,
+ * and the hover still reads the real values. */
 function buildFingerprint(history: readonly number[], type: EthDataKind, period: Exclude<EthDataPeriod, "recent">): EthFingerprint {
   const bins = Array.from({ length: ETH_FINGERPRINT_SAMPLES }, (_, bin) => {
     const from = Math.floor((bin / ETH_FINGERPRINT_SAMPLES) * history.length);
@@ -1421,10 +1440,18 @@ function buildFingerprint(history: readonly number[], type: EthDataKind, period:
 
     return total / (to - from);
   });
-  const min = Math.min(...bins);
-  const max = Math.max(...bins);
-  const wide = min > 0 ? max / min > 20 : true;
-  const linear = max - min > 1e-12 ? bins.map((value) => (value - min) / (max - min)) : bins.map(() => 0.5);
+  // Empty days (no fees yet) take the smallest real value, so a zero does
+  // not squash its whole era.
+  const positive = bins.filter((value) => value > 0);
+  const floor = positive.length > 0 ? Math.min(...positive) : 1;
+  const logs = bins.map((value) => Math.log(Math.max(value, floor)));
+  const values = logs.map((value, bin) => {
+    const era = logs.slice(Math.max(0, bin - FINGERPRINT_ERA_BINS), bin + FINGERPRINT_ERA_BINS + 1);
+    const low = Math.min(...era);
+    const high = Math.max(...era);
+
+    return high - low > 1e-6 ? (value - low) / (high - low) : 0.5;
+  });
   const { end, start } = getPeriodRange(period, type);
 
   return {
@@ -1433,7 +1460,7 @@ function buildFingerprint(history: readonly number[], type: EthDataKind, period:
     milestones: getEthMilestonesFor(type, period),
     raw: [...history],
     start,
-    values: wide ? linear.map((value) => Math.sqrt(value)) : linear,
+    values,
   };
 }
 
@@ -1586,8 +1613,10 @@ export function resolveEthMotion(
     speed: physics.speed * (Math.max(1, durationSeconds) / 8),
   });
 
+  const manualMotion = resolveEthMotionSource(values) === "manual";
+
   if (!isEthLiveDataOn(values)) {
-    // None: static. Custom: the manual Motion controls.
+    // None: static, or the Motion controls with Source = Manual.
     const manual = perSecond(resolveEthPhysicsParams(values));
 
     return {
@@ -1596,7 +1625,7 @@ export function resolveEthMotion(
       milestoneText: null,
       loopProgress,
       milestone: null,
-      physics: values["dataSource.type"] === "none" ? { ...manual, animation: "none" } : manual,
+      physics: manualMotion ? manual : { ...manual, animation: "none" },
     };
   }
 
@@ -1609,9 +1638,12 @@ export function resolveEthMotion(
   const milestone = getMilestoneWave(values, period, loopProgress, clock, durationSeconds);
   const milestoneText = getMilestoneText(values, period, loopProgress, clock, durationSeconds);
   // Motion measured from the data itself: style, speed, intensity and
-  // variation (a neutral Fluid base until the history loads).
-  const profile = ethDataFeed.getMotionProfile(type, period);
-  const physics: EthPhysicsParams = perSecond(profile ?? { ...LIVE_MOTION_BASE, animation: "fluid" });
+  // variation (a neutral Fluid base until the history loads). Manual takes
+  // them from the Motion controls; the data's breath below applies to both.
+  const profile = manualMotion ? null : ethDataFeed.getMotionProfile(type, period);
+  const physics: EthPhysicsParams = perSecond(
+    manualMotion ? resolveEthPhysicsParams(values) : (profile ?? { ...LIVE_MOTION_BASE, animation: "fluid" }),
+  );
 
   if (!series || physics.animation === "none" || getCyclesPerLoop(physics.speed) === 0) {
     return { dataLevel: 0.5, dataPulse: 0, loopProgress, milestone, milestoneText, physics };

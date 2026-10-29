@@ -7,9 +7,14 @@ import type { ToolcraftCustomControlRendererProps } from "@/toolcraft/runtime/re
 /** Runtime zoom limits (percent). */
 const ZOOM_MIN = 25;
 const ZOOM_MAX = 400;
+/** Canvases at least this wide for their height (16:9 is 1.78) cover the
+ * screen; narrower ones (3:2 and below) are shown whole. */
+const WIDE_CANVAS_MIN_ASPECT = 1.7;
+/** Air around a fitted (square or vertical) canvas. */
+const CONTAIN_MARGIN = 0.92;
 
 /**
- * The frame always fills the screen (blueprint 2026-10-09, Story addendum
+ * A wide frame always fills the screen (blueprint 2026-10-09, Story addendum
  * rounds 2-4): the output canvas is scaled to cover the whole viewport, so
  * its edges (where the pattern ends) are never visible, and the diamond and
  * background are centered on the area the floating controls panel leaves
@@ -72,10 +77,16 @@ export function useEthCoverViewport({
 
       const offsetX = Math.round(freeCenterX - (rect.left + rect.width / 2));
       // Cover: the scaled canvas reaches every edge even with the shift.
-      const nextZoom = Math.min(
-        ZOOM_MAX,
-        Math.max(ZOOM_MIN, Math.ceil(Math.max((rect.width + 2 * Math.abs(offsetX)) / cssWidth, rect.height / cssHeight) * 100)),
-      );
+      // Square and vertical canvases (1:1, 9:16) are fitted whole into the
+      // free area instead: covering a 1080x1920 canvas scaled it to about
+      // 2236x3974 px on a 16:9 screen, so the diamond and the letters were
+      // cut off (2026-10-27).
+      const freeWidth = rect.width - 2 * Math.abs(offsetX);
+      const scale =
+        cssWidth / cssHeight < WIDE_CANVAS_MIN_ASPECT
+          ? Math.min(freeWidth / cssWidth, rect.height / cssHeight) * CONTAIN_MARGIN
+          : Math.max((rect.width + 2 * Math.abs(offsetX)) / cssWidth, rect.height / cssHeight);
+      const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.ceil(scale * 100)));
       const current = viewRef.current;
 
       if (current.zoom !== nextZoom || current.offset.x !== offsetX || current.offset.y !== 0) {

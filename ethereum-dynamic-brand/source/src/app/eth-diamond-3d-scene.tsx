@@ -25,7 +25,7 @@ import {
   renderEthOutlineOverlay,
   type EthOutlineStyle,
 } from "./eth-diamond-3d-outline";
-import { ethLiveCameraHandle, type EthDiamond3dRenderState } from "./eth-diamond-3d-shared";
+import { ethLiveCameraHandle, type EthDiamond3dRenderState, type EthFrameSource } from "./eth-diamond-3d-shared";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/ethereum-holo.glb`;
 
@@ -57,11 +57,74 @@ function useEthDitherEffect(
   );
   const element = React.useMemo(() => <primitive dispose={null} object={effect} />, [effect]);
 
-  React.useEffect(() => {
-    effect.updateParams(params);
-  }, [effect, params]);
-
   return { effect, element };
+}
+
+function toDitherEffectParams(renderState: EthDiamond3dRenderState, width: number, height: number): EthDitherEffectParams {
+  return buildDitherEffectParams({
+    amount: renderState.amount,
+    animation: renderState.animation,
+    backgroundColorHex: renderState.backgroundColor,
+    backgroundGradient: renderState.backgroundGradient,
+    colorAHex: renderState.colorA,
+    colorBHex: renderState.colorB,
+    colorBShare: renderState.colorBShare,
+    colorGradient: renderState.colorGradient,
+    dataLevel: renderState.dataLevel,
+    dataPulse: renderState.dataPulse,
+    fieldStrength: renderState.fieldStrength,
+    fieldDensity: renderState.fieldDensity,
+    fingerprint: renderState.fingerprint,
+    flow: renderState.flow,
+    height,
+    includeBackground: renderState.includeBackground,
+    loopProgress: renderState.loopProgress,
+    maxSize: renderState.maxSize,
+    milestone: renderState.milestone,
+    typography: renderState.typography,
+    rotationDeg: renderState.rotationDeg,
+    patternAngleDeg: renderState.patternAngleDeg,
+    sizeVariation: renderState.sizeVariation,
+    glass: renderState.glass,
+    seed: renderState.seed,
+    shapeType: renderState.shapeType,
+    showMarks: renderState.showMarks,
+    spacing: renderState.spacing,
+    speed: renderState.speed,
+    variationDeg: renderState.variationDeg,
+    width,
+  });
+}
+
+/** Updates the effect for every frame just before the composer draws it
+ * (priority 1), from the frame source's state at this frame's time, so
+ * playback advances on every frame even when the timeline's React commit is
+ * late. Without a source, the committed state is used. */
+function EthDitherFrameUpdate({
+  cssHeight,
+  cssWidth,
+  effect,
+  frameSourceRef,
+  renderState,
+}: {
+  cssHeight: number;
+  cssWidth: number;
+  effect: EthDitherEffect;
+  frameSourceRef?: React.RefObject<EthFrameSource | null>;
+  renderState: EthDiamond3dRenderState;
+}): null {
+  const latestRef = React.useRef({ cssHeight, cssWidth, renderState });
+
+  latestRef.current = { cssHeight, cssWidth, renderState };
+
+  useFrame(() => {
+    const latest = latestRef.current;
+    const frameState = frameSourceRef?.current?.stateAt(performance.now()) ?? latest.renderState;
+
+    effect.updateParams(toDitherEffectParams(frameState, latest.cssWidth, latest.cssHeight));
+  }, 0.5);
+
+  return null;
 }
 
 export type EthCameraFit = {
@@ -390,11 +453,13 @@ function EthCanvasSizeSync({
 function EthDiamondSceneContents({
   cssHeight,
   cssWidth,
+  frameSourceRef,
   hoverEnabled,
   renderState,
 }: {
   cssHeight: number;
   cssWidth: number;
+  frameSourceRef?: React.RefObject<EthFrameSource | null>;
   hoverEnabled: boolean;
   renderState: EthDiamond3dRenderState;
 }): React.JSX.Element {
@@ -522,44 +587,9 @@ function EthDiamondSceneContents({
     };
   }, []);
 
-  const effectParams = React.useMemo(
-    () =>
-      buildDitherEffectParams({
-        amount: renderState.amount,
-        animation: renderState.animation,
-        backgroundColorHex: renderState.backgroundColor,
-        backgroundGradient: renderState.backgroundGradient,
-        colorAHex: renderState.colorA,
-        colorBHex: renderState.colorB,
-        colorBShare: renderState.colorBShare,
-        colorGradient: renderState.colorGradient,
-        dataLevel: renderState.dataLevel,
-        dataPulse: renderState.dataPulse,
-        fieldStrength: renderState.fieldStrength,
-        fieldDensity: renderState.fieldDensity,
-          fingerprint: renderState.fingerprint,
-        flow: renderState.flow,
-        height: cssHeight,
-        includeBackground: renderState.includeBackground,
-        loopProgress: renderState.loopProgress,
-        maxSize: renderState.maxSize,
-        milestone: renderState.milestone,
-        typography: renderState.typography,
-        rotationDeg: renderState.rotationDeg,
-          patternAngleDeg: renderState.patternAngleDeg,
-          sizeVariation: renderState.sizeVariation,
-          glass: renderState.glass,
-        seed: renderState.seed,
-        shapeType: renderState.shapeType,
-        spacing: renderState.spacing,
-        speed: renderState.speed,
-        variationDeg: renderState.variationDeg,
-        width: cssWidth,
-      }),
-    [renderState, cssHeight, cssWidth],
-  );
+  // Initial params only: EthDitherFrameUpdate updates them every frame.
   const { effect: ditherEffect, element: ditherEffectElement } = useEthDitherEffect(
-    effectParams,
+    toDitherEffectParams(renderState, cssWidth, cssHeight),
     facetNormalTarget.texture,
     volumePositionTarget.texture,
   );
@@ -596,6 +626,13 @@ function EthDiamondSceneContents({
         <>
           <EthFacetNormalPass target={facetNormalTarget} />
           <EthVolumePositionPass target={volumePositionTarget} />
+          <EthDitherFrameUpdate
+            cssHeight={cssHeight}
+            cssWidth={cssWidth}
+            effect={ditherEffect}
+            frameSourceRef={frameSourceRef}
+            renderState={renderState}
+          />
           <EffectComposer autoClear multisampling={0}>
             {ditherEffectElement}
           </EffectComposer>
@@ -612,6 +649,8 @@ function EthDiamondSceneContents({
 export type EthDiamond3dCanvasProps = {
   cssHeight: number;
   cssWidth: number;
+  /** Per-frame render state (smooth playback); see EthDitherFrameUpdate. */
+  frameSourceRef?: React.RefObject<EthFrameSource | null>;
   /** Data fingerprint hover (a data drives the gem). */
   hoverEnabled: boolean;
   renderState: EthDiamond3dRenderState;
@@ -628,6 +667,7 @@ export type EthDiamond3dCanvasProps = {
 export function EthDiamond3dCanvas({
   cssHeight,
   cssWidth,
+  frameSourceRef,
   hoverEnabled,
   renderState,
 }: EthDiamond3dCanvasProps): React.JSX.Element {
@@ -658,6 +698,7 @@ export function EthDiamond3dCanvas({
       <EthDiamondSceneContents
         cssHeight={cssHeight}
         cssWidth={cssWidth}
+        frameSourceRef={frameSourceRef}
         hoverEnabled={hoverEnabled}
         renderState={renderState}
       />

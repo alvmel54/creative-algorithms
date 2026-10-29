@@ -48,15 +48,30 @@ export type EthDiamond3dRenderState = {
   sizeVariation: number;
   /** Glass material, or null when off. */
   glass: EthGlass | null;
+  /** Without a background, false drops the glass body's dark fill and keeps
+   * only its edge light (the Diamond export, 2026-10-27). Default true. */
+  glassBody?: boolean;
+  /** Export only: false hides the gem (mesh and outline), so its glass and
+   * shadow go too and the background shows whole (the Background export,
+   * 2026-10-27). Default true. */
+  includeMark?: boolean;
   /** Pattern seed: data type seed plus the Shuffle offset. */
   seed: number;
   shapeType: EthShapeType;
+  /** The diamond's mark pattern; false leaves only the outline (and glass). */
+  showMarks: boolean;
   showOutline: boolean;
   spacing: number;
   speed: number;
   /** Big background typography, or null. */
   typography: EthTypographyRender | null;
   variationDeg: number;
+};
+
+/** Live preview: the render state for the frame drawn at `nowMs`
+ * (performance.now), so playback advances on every 3D frame. */
+export type EthFrameSource = {
+  stateAt: (nowMs: number) => EthDiamond3dRenderState;
 };
 
 /** The live preview's camera, set while the 3D scene is mounted. Exports copy

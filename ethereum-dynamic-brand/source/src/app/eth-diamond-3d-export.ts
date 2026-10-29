@@ -177,6 +177,9 @@ export function createEthDiamond3dExportSession(
     },
     renderFrame: (renderState) => {
       modelClone.rotation.y = (renderState.meshRotationDeg * Math.PI) / 180;
+      // Hidden, the gem covers no pixel and leaves no silhouette hull, so the
+      // shader draws no marks, glass or shadow; the outline edges hide with it.
+      modelClone.visible = renderState.includeMark ?? true;
       collectOrCreateEthOutlineEdges(
         modelClone,
         { color: renderState.outlineColor, widthPx: renderState.outlineWidth },
@@ -227,8 +230,10 @@ export function createEthDiamond3dExportSession(
           patternAngleDeg: renderState.patternAngleDeg,
           sizeVariation: renderState.sizeVariation,
           glass: renderState.glass,
+          glassBody: renderState.glassBody ?? true,
           seed: renderState.seed,
           shapeType: renderState.shapeType,
+          showMarks: renderState.showMarks,
           spacing: renderState.spacing,
           speed: renderState.speed,
           variationDeg: renderState.variationDeg,

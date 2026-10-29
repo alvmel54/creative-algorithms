@@ -38,9 +38,9 @@ export type EthAnimationMode =
   | "wave";
 
 /** Type of data (blueprint 2026-10-09 narrative model): a data source that
- * moves the mark, or None (static) / Custom (manual Motion controls). */
+ * moves the mark, or None. Custom was removed (manual motion blueprint
+ * 2026-10-27): Motion > Source = Manual replaces it and keeps the data. */
 export type EthDataSourceType =
-  | "custom"
   | "eth-price"
   | "gas-price"
   | "mix"
@@ -56,7 +56,6 @@ export type EthPhysicsParams = {
 };
 
 const dataSourceSeeds: Record<EthDataSourceType, number> = {
-  custom: 808,
   "eth-price": 505,
   none: 707,
   "gas-price": 404,
@@ -66,16 +65,27 @@ const dataSourceSeeds: Record<EthDataSourceType, number> = {
 };
 
 export function getSeedForDataSource(dataSource: EthDataSourceType): number {
-  return dataSourceSeeds[dataSource];
+  // 0 for a legacy saved "custom" until it is migrated.
+  return dataSourceSeeds[dataSource] ?? 0;
 }
 
-/** Whether a data source drives the mark: Live data is always on for a data
- * type, and off for None and Custom (blueprint 2026-10-09 narrative model;
- * the old Live data switch is gone). */
+/** Whether a data source drives the mark: always for a data type, never
+ * for None (blueprint 2026-10-09 narrative model). A legacy saved "custom"
+ * counts as no data until `useEthMotionControlsSync` migrates it. */
 export function isEthLiveDataOn(values: Record<string, unknown>): boolean {
   const type = values["dataSource.type"] ?? "mix";
 
   return type !== "none" && type !== "custom";
+}
+
+export type EthMotionSource = "from-data" | "manual";
+
+/** Motion > Source (manual motion blueprint 2026-10-27): From data measures
+ * the motion from the data's history; Manual takes the Motion controls and
+ * keeps the data, its Story and its breath (pace, Intensity swing, pulses).
+ * A legacy saved Type of data "custom" reads as Manual. */
+export function resolveEthMotionSource(values: Record<string, unknown>): EthMotionSource {
+  return values["physics.motionSource"] === "manual" || values["dataSource.type"] === "custom" ? "manual" : "from-data";
 }
 
 /** Manual physics from the Animation/Speed/Flow/Variation controls. Rendered

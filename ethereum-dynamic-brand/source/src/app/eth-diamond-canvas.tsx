@@ -35,7 +35,7 @@ import { useEthCoverViewport } from "./eth-cover-viewport";
 import { resolveEthGlass } from "./eth-glass";
 import { useEthMotionControlsSync } from "./eth-motion-controls";
 import { useEthStateTransition, type EthTransitionMode } from "./eth-state-transition";
-import type { EthDiamond3dRenderState } from "./eth-diamond-3d-shared";
+import type { EthDiamond3dRenderState, EthFrameSource } from "./eth-diamond-3d-shared";
 
 export type EthDiamondRenderState = {
   amount: number;
@@ -77,6 +77,7 @@ export type EthDiamondRenderState = {
   rotationDeg: number;
   seedOffset: number;
   shapeType: EthShapeType;
+  showMarks: boolean;
   showOutline: boolean;
   sizeVariation: number;
   spacing: number;
@@ -124,6 +125,7 @@ function readEthDiamondRenderState(
     rotationDeg: Number(values["geometry.rotation"] ?? 45),
     seedOffset: Number(values["dataSource.seed"] ?? 0),
     shapeType: (values["geometry.shapeType"] as EthShapeType) ?? "dot",
+    showMarks: (values["geometry.showMarks"] ?? true) !== false,
     showOutline: Boolean(values["geometry.showOutline"] ?? true),
     sizeVariation: Number(values["geometry.sizeVariation"] ?? 0) / 100,
     spacing: Number(values["geometry.spacing"] ?? 20),
@@ -132,6 +134,9 @@ function readEthDiamondRenderState(
     variationDeg: physics.variationDeg,
   };
 }
+
+/** How far past the last committed timeline time a 3D frame may be drawn. */
+const MAX_FRAME_EXTRAPOLATION_MS = 66;
 
 const FORM_EASE_MS = 1000;
 
@@ -300,7 +305,7 @@ export function EthDiamondCanvas(): React.JSX.Element {
     zoom: state.canvas.zoom,
   });
 
-  // Motion shows the data's measured values; editing one switches to Custom.
+  // Motion shows the data's measured values; editing one switches to Manual.
   useEthMotionControlsSync({ dataFeedVersion, dispatch, values: state.values });
 
   // Discrete changes that transition (identity, data, Live data, shape,
@@ -332,7 +337,8 @@ export function EthDiamondCanvas(): React.JSX.Element {
     transitionKey,
   });
 
-  const render3dState: EthDiamond3dRenderState = {
+  const glass = resolveEthGlass(state.values);
+  const toRender3dState = (renderState: EthDiamondRenderState): EthDiamond3dRenderState => ({
     amount: renderState.amount,
     animation: renderState.animation,
     backgroundColor: renderState.backgroundColor,
@@ -358,14 +364,50 @@ export function EthDiamondCanvas(): React.JSX.Element {
     patternAngleDeg: renderState.patternAngleDeg,
     rotationDeg: renderState.rotationDeg,
     sizeVariation: renderState.sizeVariation,
-    glass: resolveEthGlass(state.values),
+    glass,
     typography: renderState.typography,
     seed: getSeedForDataSource(renderState.dataSource) + renderState.seedOffset,
     shapeType: renderState.shapeType,
+    showMarks: renderState.showMarks,
     showOutline: renderState.showOutline,
     spacing: renderState.spacing,
     speed: renderState.speed,
     variationDeg: renderState.variationDeg,
+  });
+  const render3dState = toRender3dState(renderState);
+
+  // Smooth playback (2026-10-27): the timeline time reaches the canvas
+  // through a React commit, and 11-19 % of the 3D frames were drawn before
+  // that commit, repeating the previous time (then jumping twice as far).
+  // The 3D scene asks for the state of each frame here instead: the last
+  // committed time plus the time since it was committed, while playing.
+  const frameSourceRef = React.useRef<EthFrameSource | null>(null);
+  const committedTimeRef = React.useRef({ at: 0, time: Number.NaN });
+  const timeline = state.timeline;
+
+  React.useLayoutEffect(() => {
+    if (committedTimeRef.current.time !== timeline.currentTimeSeconds) {
+      committedTimeRef.current = { at: performance.now(), time: timeline.currentTimeSeconds };
+    }
+  });
+
+  frameSourceRef.current = {
+    stateAt: (nowMs) => {
+      const committed = committedTimeRef.current;
+      const durationSeconds = timeline.durationSeconds;
+
+      if (!timeline.isPlaying || durationSeconds <= 0 || !Number.isFinite(committed.time)) {
+        return render3dState;
+      }
+
+      // At most a few frames ahead: a stalled clock (scrub, hover pause)
+      // must not run away.
+      const ahead = Math.min(MAX_FRAME_EXTRAPOLATION_MS, Math.max(0, nowMs - committed.at)) / 1000;
+      const progress =
+        getToolcraftTimelineLoopTime({ currentTimeSeconds: committed.time + ahead, durationSeconds }) / durationSeconds;
+
+      return toRender3dState(readEthDiamondRenderState(state.values, progress, form, durationSeconds));
+    },
   };
 
   return (
@@ -377,6 +419,7 @@ export function EthDiamondCanvas(): React.JSX.Element {
         <EthDiamond3dCanvas
           cssHeight={cssHeight}
           cssWidth={cssWidth}
+          frameSourceRef={frameSourceRef}
           hoverEnabled={fingerprint !== null}
           renderState={render3dState}
         />

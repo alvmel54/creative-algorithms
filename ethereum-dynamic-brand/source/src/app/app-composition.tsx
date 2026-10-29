@@ -27,6 +27,7 @@ import { requestEthViewCenter } from "./eth-view-center";
 import { resolveEthGlass } from "./eth-glass";
 import { createEthGifEncoder, ETH_GIF_FPS, getEthGifSize } from "./eth-gif-export";
 import { EthDiamondCanvas } from "./eth-diamond-canvas";
+import { matchEthIdentity } from "./eth-identity-presets";
 import {
   applyEthFormAmount,
   applyEthFormSize,
@@ -41,6 +42,7 @@ import {
   loadEthDiamondModelForExport,
   renderEthDiamond3dFrame,
 } from "./eth-diamond-3d-export";
+import { getEthGlassHullBounds } from "./eth-diamond-3d-facets";
 import type { EthDiamond3dRenderState } from "./eth-diamond-3d-shared";
 import { appSchema } from "./app-schema";
 
@@ -148,6 +150,7 @@ function read3dRenderState(
       getSeedForDataSource((state.values["dataSource.type"] as EthDataSourceType) ?? "eth-price") +
       Number(state.values["dataSource.seed"] ?? 0),
     shapeType: (state.values["geometry.shapeType"] as EthShapeType) ?? "dot",
+    showMarks: (state.values["geometry.showMarks"] ?? true) !== false,
     showOutline: Boolean(state.values["geometry.showOutline"] ?? true),
     spacing: Number(state.values["geometry.spacing"] ?? 20),
     speed: physics.speed,
@@ -199,6 +202,138 @@ async function exportEthDiamondPng(context: ToolcraftPanelActionContext): Promis
   }
 }
 
+/** Share of the mark's larger side added around it by Trim to mark. */
+const TRIM_PADDING = 0.04;
+
+/** The crop around the gem: the rendered silhouette hull (canvas uv, y up)
+ * widened by the outline's half width (`edgePx`), padded by TRIM_PADDING and
+ * clamped to the canvas. Marks and glass sit inside the mesh, so the hull
+ * plus the outline holds every drawn pixel. */
+function getEthTrimRect(
+  hull: { maxU: number; maxV: number; minU: number; minV: number },
+  width: number,
+  height: number,
+  edgePx: number,
+): { height: number; width: number; x: number; y: number } {
+  const left = hull.minU * width - edgePx;
+  const right = hull.maxU * width + edgePx;
+  const top = (1 - hull.maxV) * height - edgePx;
+  const bottom = (1 - hull.minV) * height + edgePx;
+  const pad = Math.max(right - left, bottom - top) * TRIM_PADDING;
+  const x = Math.max(0, Math.floor(left - pad));
+  const y = Math.max(0, Math.floor(top - pad));
+
+  return {
+    height: Math.min(height, Math.ceil(bottom + pad)) - y,
+    width: Math.min(width, Math.ceil(right + pad)) - x,
+    x,
+    y,
+  };
+}
+
+function formatEthExportDate(date: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Diamond (brand export, 2026-10-27): the diamond alone as a transparent
+ * PNG for logo use. The background is forced off for this export only (the
+ * Include switch is untouched), and the glass keeps its edge light without
+ * the dark body fill. Trim to mark crops to the diamond. */
+async function exportEthDiamondLogo(context: ToolcraftPanelActionContext): Promise<void> {
+  const { state } = context;
+  const resolution = String(state.values["export.image.resolution"] ?? "4k") as
+    | ToolcraftImageExportResolution
+    | string;
+  const backgroundColor = resolveEthColor(state.values["scene.background"], "#0b0b10");
+  const model3d = await loadEthDiamondModelForExport();
+  let hull: ReturnType<typeof getEthGlassHullBounds> = null;
+  let outlineHalfWidth = 0;
+
+  const canvas = createToolcraftPngExportCanvas({
+    background: backgroundColor,
+    includeBackground: false,
+    render: ({ context: exportContext, cssHeight, cssWidth, pixelHeight, pixelWidth }) => {
+      const offscreenCanvas = document.createElement("canvas");
+      const renderState = {
+        ...read3dRenderState(state, backgroundColor, false, readLoopProgress(state), pixelHeight),
+        glassBody: false,
+      };
+
+      renderEthDiamond3dFrame(offscreenCanvas, pixelWidth, pixelHeight, model3d, renderState);
+      // Where the gem landed in this frame (read before the live preview
+      // syncs the shared hull again).
+      hull = getEthGlassHullBounds();
+      outlineHalfWidth = renderState.showOutline ? renderState.outlineWidth / 2 : 0;
+      exportContext.drawImage(offscreenCanvas, 0, 0, cssWidth, cssHeight);
+    },
+    resolution,
+    state,
+  });
+
+  let output = canvas;
+  const bounds =
+    (state.values["export.trimToMark"] ?? true) === true && hull
+      ? getEthTrimRect(hull, canvas.width, canvas.height, outlineHalfWidth + 2)
+      : null;
+
+  if (bounds) {
+    output = document.createElement("canvas");
+    output.width = bounds.width;
+    output.height = bounds.height;
+    output.getContext("2d")?.drawImage(canvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
+  }
+
+  const blob: Blob | null = await new Promise((resolve) => output.toBlob(resolve, "image/png"));
+
+  if (blob) {
+    triggerBlobDownload(blob, `ethereum-diamond-${matchEthIdentity(state.values)}-${formatEthExportDate(new Date())}.png`);
+  }
+}
+
+/** Background (brand export, 2026-10-27): the dynamic background without
+ * the diamond, for social posts. The background is forced on for this
+ * export only; the Story letters stay when a Story plays. Canvas size and
+ * Aspect ratio come from Setup. */
+async function exportEthBackground(context: ToolcraftPanelActionContext): Promise<void> {
+  const { state } = context;
+  const resolution = String(state.values["export.image.resolution"] ?? "4k") as
+    | ToolcraftImageExportResolution
+    | string;
+  const format = String(state.values["export.image.format"] ?? "png");
+  const backgroundColor = resolveEthColor(state.values["scene.background"], "#0b0b10");
+  const model3d = await loadEthDiamondModelForExport();
+
+  const canvas = createToolcraftPngExportCanvas({
+    background: backgroundColor,
+    includeBackground: true,
+    render: ({ context: exportContext, cssHeight, cssWidth, pixelHeight, pixelWidth }) => {
+      const offscreenCanvas = document.createElement("canvas");
+
+      renderEthDiamond3dFrame(offscreenCanvas, pixelWidth, pixelHeight, model3d, {
+        ...read3dRenderState(state, backgroundColor, true, readLoopProgress(state), pixelHeight),
+        includeMark: false,
+      });
+      exportContext.drawImage(offscreenCanvas, 0, 0, cssWidth, cssHeight);
+    },
+    resolution,
+    state,
+  });
+
+  const extension = format === "jpg" ? "jpg" : "png";
+  const blob: Blob | null = await new Promise((resolve) =>
+    canvas.toBlob(resolve, extension === "jpg" ? "image/jpeg" : "image/png", 0.95),
+  );
+
+  if (blob) {
+    triggerBlobDownload(
+      blob,
+      `ethereum-background-${matchEthIdentity(state.values)}-${formatEthExportDate(new Date())}.${extension}`,
+    );
+  }
+}
+
 async function exportEthDiamondVideo({
   reportProgress,
   state,
@@ -242,8 +377,17 @@ async function exportEthDiamondVideo({
   // `WebGLRenderer` per frame would exhaust the browser's live context budget.
   const session3d = createEthDiamond3dExportSession(canvas, size.width, size.height, model3d);
 
+  // Video Export > Include diamond off: the background alone (2026-10-27).
+  const includeMark = (state.values["export.video.includeMark"] ?? true) === true;
+  const fileStem = includeMark
+    ? "eth-diamond"
+    : `ethereum-background-${matchEthIdentity(state.values)}-${formatEthExportDate(new Date())}`;
+
   const drawFrame = (timelineProgress: number): void => {
-    session3d.renderFrame(read3dRenderState(state, backgroundColor, true, timelineProgress, size.height));
+    session3d.renderFrame({
+      ...read3dRenderState(state, backgroundColor, true, timelineProgress, size.height),
+      includeMark,
+    });
   };
 
   if (isGif) {
@@ -260,7 +404,7 @@ async function exportEthDiamondVideo({
       session3d.dispose();
     }
 
-    triggerBlobDownload(gif.finish(), "eth-diamond.gif");
+    triggerBlobDownload(gif.finish(), `${fileStem}.gif`);
     return;
   }
 
@@ -300,7 +444,7 @@ async function exportEthDiamondVideo({
     throw new Error("Video export produced an empty file.");
   }
 
-  triggerBlobDownload(new Blob([target.buffer], { type: container.format.mimeType }), `eth-diamond.${container.extension}`);
+  triggerBlobDownload(new Blob([target.buffer], { type: container.format.mimeType }), `${fileStem}.${container.extension}`);
 }
 
 export const appComposition: ToolcraftAppComposition = {
@@ -332,6 +476,16 @@ export const appComposition: ToolcraftAppComposition = {
 
       case "export-video": {
         await exportEthDiamondVideo(context);
+        return;
+      }
+
+      case "export-diamond": {
+        await exportEthDiamondLogo(context);
+        return;
+      }
+
+      case "export-background": {
+        await exportEthBackground(context);
         return;
       }
 

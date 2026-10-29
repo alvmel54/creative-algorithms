@@ -10,7 +10,8 @@ import { resolveEthColor } from "./eth-diamond-shading";
  * ecosystem: Foundation Mix, Blockchain Total Staking, ETH the ETH price,
  * Developers gas, dApps TVL. Changing Type of data by hand keeps the
  * identity (only the look decides Custom), so any identity can still tell
- * its story through another metric.
+ * its story through another metric. An identity also sets Motion back to
+ * From data, so the motion reads its data again.
  */
 export type EthIdentityId = "foundation" | "blockchain" | "eth" | "developers" | "dapps";
 
@@ -28,6 +29,7 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
     label: "Foundation",
     values: {
       "dataSource.type": "mix",
+      "physics.motionSource": "from-data",
       "geometry.shapeType": "circle",
       "geometry.colorA": "#7c5cff",
       "geometry.colorB": "#b9a8ff",
@@ -46,6 +48,7 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
     label: "Blockchain",
     values: {
       "dataSource.type": "total-staking",
+      "physics.motionSource": "from-data",
       "geometry.shapeType": "square",
       "geometry.colorA": "#2f5bff",
       "geometry.colorB": "#3fe0ff",
@@ -63,6 +66,7 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
     label: "ETH",
     values: {
       "dataSource.type": "eth-price",
+      "physics.motionSource": "from-data",
       "geometry.shapeType": "diamond",
       "geometry.colorA": "#627eea",
       "geometry.colorB": "#8f7bff",
@@ -80,6 +84,7 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
     label: "Developers",
     values: {
       "dataSource.type": "gas-price",
+      "physics.motionSource": "from-data",
       "geometry.shapeType": "cross",
       "geometry.colorA": "#00c2ff",
       "geometry.colorB": "#5ff2b0",
@@ -97,6 +102,7 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
     label: "dApps",
     values: {
       "dataSource.type": "tvl",
+      "physics.motionSource": "from-data",
       "geometry.shapeType": "mixed",
       "geometry.colorA": "#ff4fb8",
       "geometry.colorB": "#ff9a3c",
@@ -129,8 +135,9 @@ function sameIngredient(target: string, current: unknown, expected: string | num
   return current === expected;
 }
 
-/** Ingredients an identity sets but that do not decide Custom: its data. */
-const ethIdentityUnmatchedTargets = new Set(["dataSource.type"]);
+/** Ingredients an identity sets but that do not decide Custom: its data,
+ * and Motion back to From data (manual motion blueprint 2026-10-27). */
+const ethIdentityUnmatchedTargets = new Set(["dataSource.type", "physics.motionSource"]);
 
 /** The identity is derived, not stored: the preset whose look ingredients
  * all match the current values, or "custom" as soon as any of them was
