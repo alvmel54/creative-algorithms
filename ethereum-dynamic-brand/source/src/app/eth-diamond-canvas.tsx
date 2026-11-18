@@ -22,6 +22,8 @@ import {
   resolveEthForm,
   resolveEthMotion,
   readEthFingerprint,
+  resolveEthInnovation,
+  resolveEthSpinTurns,
   resolveEthPeriod,
   type EthFingerprint,
   type EthForm,
@@ -63,6 +65,8 @@ export type EthDiamondRenderState = {
   loopProgress: number;
   maxSize: number;
   meshRotationDeg: number;
+  /** Diamond spin: signed whole turns per loop from the last 30 days. */
+  spinTurns: number;
   modelZoom: number;
   /** Active milestone wave (history periods), or null. */
   milestone: EthMilestoneRender | null;
@@ -117,6 +121,7 @@ function readEthDiamondRenderState(
     loopProgress,
     maxSize: applyEthFormSize(Number(values["geometry.size"] ?? 5), form),
     meshRotationDeg: Number(values["geometry.meshRotation"] ?? 0),
+    spinTurns: resolveEthSpinTurns(values),
     modelZoom: Number(values["geometry.modelZoom"] ?? 55) / 100,
     milestone: milestoneRender,
     outlineColor: resolveEthColor(values["geometry.outlineColor"], "#ffffff"),
@@ -227,7 +232,9 @@ export function EthDiamondCanvas(): React.JSX.Element {
   const { dispatch, state } = useToolcraft();
   const cssWidth = state.canvas.size.width;
   const cssHeight = state.canvas.size.height;
-  const pixelRatio = Number(state.values["canvas.renderScale"] ?? state.schema.canvas.renderScale.defaultValue ?? 1);
+  const pixelRatio = state.schema.canvas.renderScale.enabled
+    ? Number(state.values["canvas.renderScale"] ?? state.schema.canvas.renderScale.defaultValue ?? 1)
+    : 1;
   const loopProgress = React.useMemo(
     () =>
       state.timeline.durationSeconds > 0
@@ -270,6 +277,7 @@ export function EthDiamondCanvas(): React.JSX.Element {
     [dataSourceType, dataPeriod, dataFeedVersion],
   );
   const easedFingerprint = useEasedEthFingerprint(fingerprint?.values ?? null);
+  const innovation = resolveEthInnovation(state.values, fingerprint);
 
   const renderState = React.useMemo(
     () => readEthDiamondRenderState(state.values, loopProgress, form, state.timeline.durationSeconds),
@@ -354,9 +362,11 @@ export function EthDiamondCanvas(): React.JSX.Element {
     fingerprint: easedFingerprint,
     flow: renderState.flow,
     includeBackground,
+    innovation,
     loopProgress: renderState.loopProgress,
     maxSize: renderState.maxSize,
     meshRotationDeg: renderState.meshRotationDeg,
+    spinTurns: renderState.spinTurns,
     modelZoom: renderState.modelZoom,
     milestone: renderState.milestone,
     outlineColor: renderState.outlineColor,

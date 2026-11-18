@@ -34,6 +34,8 @@ import {
   ethDataFeed,
   resolveEthForm,
   resolveEthMotion,
+  resolveEthInnovation,
+  resolveEthSpinTurns,
   resolveEthPeriod,
 } from "./eth-data-feed";
 import { getSeedForDataSource, resolveEthColor, type EthDataSourceType, type EthShapeType } from "./eth-diamond-shading";
@@ -112,6 +114,10 @@ function read3dRenderState(
   // Outline width is in canvas px (like the live preview); the export renders
   // at its own pixel size, so scale it or a 4K export draws a hairline.
   const outlineScale = outputHeight / Math.max(1, state.canvas.size.height);
+  const fingerprint = ethDataFeed.getFingerprint(
+    (state.values["dataSource.type"] as EthDataSourceType) ?? "mix",
+    resolveEthPeriod(state.values),
+  );
 
   return {
     amount: applyEthFormAmount(Number(state.values["geometry.amount"] ?? 250), form),
@@ -128,16 +134,14 @@ function read3dRenderState(
     // The shader draws the field only when the background is included.
     fieldStrength: resolveEthFieldStrength(state.values),
     fieldDensity: resolveEthFieldDensity(state.values),
-    fingerprint:
-      ethDataFeed.getFingerprint(
-        (state.values["dataSource.type"] as EthDataSourceType) ?? "mix",
-        resolveEthPeriod(state.values),
-      )?.values ?? null,
+    fingerprint: fingerprint?.values ?? null,
     flow: physics.flow,
     includeBackground,
+    innovation: resolveEthInnovation(state.values, fingerprint),
     loopProgress,
     maxSize: applyEthFormSize(Number(state.values["geometry.size"] ?? 5), form),
     meshRotationDeg: Number(state.values["geometry.meshRotation"] ?? 0),
+    spinTurns: resolveEthSpinTurns(state.values),
     modelZoom: Number(state.values["geometry.modelZoom"] ?? 55) / 100,
     milestone: milestoneRender,
     outlineColor: resolveEthColor(state.values["geometry.outlineColor"], "#ffffff"),

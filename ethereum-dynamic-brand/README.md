@@ -9,14 +9,11 @@ A generative Ethereum identity mark rendered live in 3D (WebGL, stippled/dithere
 |---|---|---|---|
 | Aspect ratio | 1:1, 3:2, 16:9, 3:4, 9:16, 2:3, 4:3, Custom | 16:9 | Output canvas aspect ratio |
 | Canvas width / height | Free text (px) | 1920 x 1080 | Output canvas size |
-| Resolution scale | 1-2, step 0.25 | 1 | Supersamples the live preview (exports use their own Resolution setting) |
-| Timeline | On / Off | On | Enables the playback timeline |
 
 ### Identity
 | Name | Range / Options | Default | Effect |
 |---|---|---|---|
 | Preset | Foundation, Blockchain, ETH, Developers, dApps | Custom (shown once any control is edited by hand) | Sets shape, palette, accent color, density and Type of data together as one identity |
-| Pattern seed (Shuffle) | Action | - | Reshuffles the mark's deterministic pattern |
 
 ### Data
 | Name | Range / Options | Default | Effect |
@@ -24,6 +21,7 @@ A generative Ethereum identity mark rendered live in 3D (WebGL, stippled/dithere
 | Type of data | Mix, ETH Price, Gas Price, TVL, Total Staking, None | Mix | The live data behind the mark: tells the Story, shapes the diamond's texture (the fingerprint) and, with Motion Source set to From data, drives speed, intensity, variation and animation style. None has no data: the mark is still, or moves with Manual motion. |
 | Story | Off, Since inception, Last 10 years, Last 5 years | Since inception | Plays the data's history as a loop, with milestones called out in the Accent color. Off shows the latest 12 months with no milestones. |
 | Text opacity | 0-100% | 100% | Visibility of the Story's milestone text behind the diamond |
+| Innovation | On / Off | On | Shades each Ethereum upgrade (London, The Merge, Dencun...) into the diamond with Color B from its date upward, more where the upgrade moved the data more. Off splits Color A/B evenly. Hidden when Type of data is None. |
 | Transition | Dissolve, Fade, Off | Dissolve | How the mark changes when identity, data, shape, animation or gradient changes |
 
 ### Motion
@@ -39,11 +37,12 @@ A generative Ethereum identity mark rendered live in 3D (WebGL, stippled/dithere
 | Name | Range / Options | Default | Effect |
 |---|---|---|---|
 | Zoom | 30-200% | 55% | 3D camera distance (the mouse wheel over the canvas also zooms) |
-| Diamond rotation | 0-360 degrees | 0 | Turns the 3D diamond around its vertical axis |
+| Diamond rotation | 0-360 degrees | 0 | The diamond's angle around its vertical axis, and where its Spin starts |
+| Spin | On / Off | On | Turns the diamond with the data's last 30 days against its typical monthly move: rising turns right, falling left, steady is slowest (1 turn per loop), a bigger move is faster (up to 4). Off keeps it at Diamond rotation. Hidden when Type of data is None. |
 | View (Center view) | Action | - | Recenters the 3D view after dragging |
 | Pattern | On / Off | On | The diamond's mark pattern (the data fingerprint). Off leaves only the outline (and the glass, if on). |
-| Outline | On / Off | On | The white line along the diamond's facet edges |
-| Outline color | Color picker | #ffffff | Outline color (shown when Outline is on) |
+| Outline | On / Off | On | The line along the diamond's facet edges, in the identity's Color B |
+| Outline color | Color picker | #b9a8ff | Outline color; each identity sets it to its Color B, changing it by hand shows Custom (shown when Outline is on) |
 | Outline width | 0.25-6px, step 0.25 | 2px | Outline stroke width (shown when Outline is on) |
 
 ### Glass
@@ -67,6 +66,7 @@ A generative Ethereum identity mark rendered live in 3D (WebGL, stippled/dithere
 | Spacing | 0-50px | 22px | Base grid cell size before density modulation |
 | Mark rotation | 0-360 degrees | 0 | Rotates each mark in place |
 | Pattern angle | 0-360 degrees | 0 | Rotates the whole pattern grid (diamond and Field background) |
+| Pattern seed (Shuffle) | Action | - | Re-deals the pattern: every mark's grid offset, jitter, per-facet rotation, Color B pick and Mixed shape, in the diamond and the Field. The data and motion are unchanged. |
 
 ### Palette
 | Name | Range / Options | Default | Effect |
@@ -82,7 +82,7 @@ A generative Ethereum identity mark rendered live in 3D (WebGL, stippled/dithere
 | Include | On / Off | On | Whether the background is included in the export |
 | Background color | Color picker | #0b0b10 | Scene background color |
 | Fill | Color, Gradient | Color | Plain color fill, or a gradient over the color |
-| Pattern | None, Field | Field | Field continues the marks' pattern around the diamond across the background |
+| Pattern | None, Field | Field | Field continues the marks' pattern around the diamond, in the same colors, and moves with the diamond's Motion animation style, Intensity, Speed and data |
 | Field Strength | 0-100% | 60% | Visibility of the Field pattern over the background color (Field only) |
 | Field density | 100-300%, step 10 | 200% | Marks per row in the Field, relative to the diamond's grid (Field only) |
 

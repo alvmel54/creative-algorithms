@@ -144,6 +144,8 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uTextColor;
   uniform float uFingerprint[${ETH_FINGERPRINT_SAMPLES}];
   uniform float uFingerprintOn;
+  uniform float uInnovation[${ETH_FINGERPRINT_SAMPLES}];
+  uniform float uInnovationOn;
   uniform float uHoverOn;
   uniform vec3 uHoverPoint;
   uniform float uHoverRadius;
@@ -156,6 +158,21 @@ const fragmentShader = /* glsl */ `
     int low = int(floor(position));
     int high = min(${ETH_FINGERPRINT_SAMPLES - 1}, low + 1);
     return mix(uFingerprint[low], uFingerprint[high], position - float(low));
+  }
+
+  // Innovation layer (narrative v2, 2026-11-16): the share of Color B at a
+  // height of the gem. Nearest bin, so each upgrade reads as a step.
+  float ethInnovationAt(float t) {
+    int bin = int(clamp(floor(t * ${ETH_FINGERPRINT_SAMPLES}.0), 0.0, ${ETH_FINGERPRINT_SAMPLES - 1}.0));
+    return uInnovation[bin];
+  }
+
+  // Between bin centers, for Color gradient: a soft ramp through the steps.
+  float ethInnovationSmooth(float t) {
+    float position = clamp(t * ${ETH_FINGERPRINT_SAMPLES}.0 - 0.5, 0.0, ${ETH_FINGERPRINT_SAMPLES - 1}.0);
+    int low = int(floor(position));
+    int high = min(${ETH_FINGERPRINT_SAMPLES - 1}, low + 1);
+    return mix(uInnovation[low], uInnovation[high], position - float(low));
   }
 
   // Hover: 1 on the marks around the pointer (a sphere in the model's own
@@ -315,9 +332,20 @@ const fragmentShader = /* glsl */ `
     // Pattern angle: the grid is turned about the canvas center.
     vec2 canvasCenter = vec2(uAspect * 0.5, 0.5);
     vec2 gridPos = canvasCenter + ethRotate(pos - canvasCenter, -uPatternAngle);
+    // Shared motion (2026-11-18): the Field runs the gem's Motion > Animation
+    // style with the same formulas, clock and Intensity, so the background
+    // continues the diamond's movement. Only Flow travels along the streams.
+    bool flowStyle = uAnimMode == 8;
+    float twoPiCycles = uLoopProgress * uCycles * 6.28318530718;
+    // Drift: the grid scrolls down the screen a whole number of cells per
+    // loop and the hashes repeat with that many rows, as on the gem.
+    float driftCellsPerCycle = max(1.0, floor(uFlow * 2.0 + 0.5));
+    int driftRowCount = int(driftCellsPerCycle * max(uCycles, 1.0));
+    float scroll = uAnimMode == 4 ? uLoopProgress * uCycles * driftCellsPerCycle * cell : 0.0;
+    gridPos.y -= scroll;
     vec2 base = floor(gridPos / cell);
-    float cycles = uAnimMode == 0 ? 0.0 : uCycles;
-    float t = cycles == 0.0 ? 0.0 : uLoopProgress * 6.28318530718;
+    float cycles = flowStyle ? uCycles : 0.0;
+    float t = flowStyle ? uLoopProgress * 6.28318530718 : 0.0;
     float pixel = ethPixel;
     float markSize = uMaxSize * 0.8 / sqrt(uFieldDensity);
     float ur = cos(uRotation);
@@ -339,21 +367,58 @@ const fragmentShader = /* glsl */ `
     for (int dy = -uCellReach; dy <= uCellReach; dy++) {
       for (int dx = -uCellReach; dx <= uCellReach; dx++) {
         vec2 c = base + vec2(float(dx), float(dy));
-        ivec3 key = ivec3(ivec2(c), 9);
-        vec2 latticeCenter = (c + 0.5) * cell + (vec2(ethHash(key, 10), ethHash(key, 11)) - 0.5) * cell * 0.25;
+        ivec2 hashCell = ivec2(c);
+        if (uAnimMode == 4) {
+          hashCell.y = ((hashCell.y % driftRowCount) + driftRowCount) % driftRowCount;
+        }
+        ivec3 key = ivec3(hashCell, 9);
+        vec2 latticeCenter = (c + 0.5) * cell + (vec2(ethHash(key, 10), ethHash(key, 11)) - 0.5) * cell * 0.25 + vec2(0.0, scroll);
         vec2 center = canvasCenter + ethRotate(latticeCenter - canvasCenter, uPatternAngle);
         vec2 q = vec2((center.x - uFieldCenter.x) / uFieldSize.x, -(center.y - uFieldCenter.y) / uFieldSize.y);
         float radius = length(q);
         float falloff = 1.0 - 0.75 * smoothstep(0.5, 1.6, radius);
         vec3 stream = ethFlowField(vec3(q, 0.0), t, uFlow * 1.2);
         vec2 d = vec2(stream.x, -stream.y);
-        if (radius > 0.0001) {
+        if (flowStyle && radius > 0.0001) {
           d += vec2(q.y, q.x) / radius * uDataPulse * 1.5 * max(0.0, 1.0 - radius * 1.6);
         }
         d /= max(length(d), 0.0001);
         float along = q.x * d.x - q.y * d.y;
-        float s = fract(uLoopProgress * cycles - along * 2.0 + ethHash(key, 12));
-        float size = markSize * smoothstep(0.0, 0.1, s) * smoothstep(1.0, 0.9, s);
+        // Flow: each mark travels a short stretch of its stream and fades at
+        // both ends. Every other style keeps the mark whole in its cell.
+        float s = flowStyle ? fract(uLoopProgress * cycles - along * 2.0 + ethHash(key, 12)) : 0.5;
+        // The gem's styles, continued outward (q is the gem's own frame:
+        // its center, y up, about one unit across the gem).
+        float particlePhase = ethHash(key, 12) * uVariationRad;
+        float sizeMul = 1.0;
+        vec2 motionOffset = vec2(0.0);
+        if (uAnimMode == 1 || uAnimMode == 3) {
+          // Fluid / Orbit: small circles.
+          float angle = twoPiCycles + particlePhase;
+          motionOffset = uAnimMode == 1
+            ? vec2(sin(angle), cos(twoPiCycles + particlePhase * 1.3)) * uFlow * cell * 0.5
+            : vec2(cos(angle), sin(angle)) * uFlow * cell * 0.5;
+        } else if (uAnimMode == 2) {
+          // Pulse: the gem's breath, rolling out from its core.
+          float breath = sin(twoPiCycles - radius * 6.0 + particlePhase * 0.15);
+          sizeMul = 1.0 + uFlow * 0.35 * breath;
+          vec2 fromCenter = center - uFieldCenter;
+          float fromCenterLength = length(fromCenter);
+          if (fromCenterLength > 0.00001) {
+            motionOffset = (fromCenter / fromCenterLength) * breath * uFlow * cell * 0.3;
+          }
+        } else if (uAnimMode == 5) {
+          // Wave: the same wave climbing the screen, in phase with the gem's.
+          motionOffset.y = sin(twoPiCycles - q.y * 9.42477796 + particlePhase * 0.15) * uFlow * cell * 0.45;
+        } else if (uAnimMode == 6) {
+          // Shimmer.
+          sizeMul = max(0.0, 1.0 + uFlow * 0.5 * sin(twoPiCycles * 2.0 + particlePhase * 3.0));
+        } else if (uAnimMode == 7) {
+          // Ripple: the gem's rings keep spreading outward.
+          sizeMul = max(0.0, 1.0 + uFlow * 0.4 * sin(twoPiCycles * 1.5 - radius * 22.0 + particlePhase * 0.3));
+        }
+        center += motionOffset;
+        float size = markSize * smoothstep(0.0, 0.1, s) * smoothstep(1.0, 0.9, s) * sizeMul;
         size *= max(0.0, 1.0 + (ethHash(key, 16) - 0.5) * 2.0 * uSizeVariation);
         // Ring tied to the pattern: this mark's stream and ignition delay.
         vec2 outward = center - uFieldCenter;
@@ -374,7 +439,7 @@ const fragmentShader = /* glsl */ `
         // about 4 s to compile instead of 1.5 s.
         int passes = lettersHere ? 2 : 1;
         for (int pass = 0; pass < passes; pass++) {
-          float passSize = pass == 0 ? size : markSize * 1.875 * life;
+          float passSize = pass == 0 ? size : markSize * 1.875 * life * sizeMul;
           float m = passSize <= 0.0005 ? 0.0 : ethShapeMask(shape, pr, passSize, pixel);
           if (pass == 0) {
             if (m * falloff > best) {
@@ -572,6 +637,7 @@ const fragmentShader = /* glsl */ `
     float mask = 0.0;
     ivec2 markCell = ivec2(baseCell);
     float markHover = 0.0;
+    float markFromBase = 0.5;
     float markMilestone = 0.0;
     // Milestone ring in screen space, like the 2D renderer (distance from
     // the gem's center over half its height): the 3D surface sits far from
@@ -710,6 +776,7 @@ const fragmentShader = /* glsl */ `
             mask = cellMask;
             markCell = hashCell;
             markHover = hoverSpot;
+            markFromBase = fromBase;
           }
         }
       }
@@ -717,10 +784,18 @@ const fragmentShader = /* glsl */ `
 
     mask *= inputColor.a;
 
-    vec3 flatColor = mix(uColorA, uColorB, step(1.0 - uColorBShare, ethHash(ivec3(markCell, 0), 6)));
+    // Innovation layer: each mark's share of Color B is its height's (a mark
+    // takes B when its own hash falls under that share), so the gem shifts
+    // from A at the base to more B at the tip in steps at the upgrades.
+    float markBShare = uInnovationOn > 0.5 ? ethInnovationAt(markFromBase) : uColorBShare;
+    vec3 flatColor = mix(uColorA, uColorB, step(1.0 - markBShare, ethHash(ivec3(markCell, 0), 6)));
     // Color A at the top, Color B at the bottom, like the 2D renderer (uv.y
-    // grows upward here).
-    vec3 gradientColor = mix(uColorA, uColorB, clamp(1.0 - uv.y + uColorBShare - 0.5, 0.0, 1.0));
+    // grows upward here). With Innovation, a ramp along the gem's height
+    // through the same steps.
+    float pixelFromBase = clamp((modelPos.y - uBoundsMin.y) / max(uBoundsMax.y - uBoundsMin.y, 0.0001), 0.0, 1.0);
+    vec3 gradientColor = uInnovationOn > 0.5
+      ? mix(uColorA, uColorB, ethInnovationSmooth(pixelFromBase))
+      : mix(uColorA, uColorB, clamp(1.0 - uv.y + uColorBShare - 0.5, 0.0, 1.0));
     vec3 markColor = uColorGradient > 0.5 ? gradientColor : flatColor;
     if (uGemMilestoneStrength > 0.0) {
       // Per-mark ignition: each mark's own delay, so the front lights mark by
@@ -927,6 +1002,9 @@ export type EthDitherEffectParams = {
   flow: number;
   height: number;
   includeBackground: boolean;
+  /** Innovation layer: Color B share per bin from the gem's base to its
+   * tip, or null for the even colorBShare split. */
+  innovation: readonly number[] | null;
   loopProgress: number;
   maxSize: number;
   milestone: EthMilestoneRender | null;
@@ -1011,6 +1089,7 @@ export function buildDitherEffectParams(input: {
   flow: number;
   height: number;
   includeBackground: boolean;
+  innovation?: readonly number[] | null;
   loopProgress: number;
   maxSize: number;
   milestone?: EthMilestoneRender | null;
@@ -1045,6 +1124,7 @@ export function buildDitherEffectParams(input: {
     flow: input.flow,
     height: input.height,
     includeBackground: input.includeBackground,
+    innovation: input.innovation ?? null,
     loopProgress: input.loopProgress,
     maxSize: input.maxSize,
     milestone: input.milestone ?? null,
@@ -1154,6 +1234,8 @@ export class EthDitherEffect extends Effect {
         ["uTextColor", new Uniform(new Vector3(1, 0.79, 0.3))],
         ["uFingerprint", new Uniform(new Float32Array(ETH_FINGERPRINT_SAMPLES))],
         ["uFingerprintOn", new Uniform(0)],
+        ["uInnovation", new Uniform(new Float32Array(ETH_FINGERPRINT_SAMPLES))],
+        ["uInnovationOn", new Uniform(0)],
         ["uHoverOn", new Uniform(0)],
         ["uHoverPoint", new Uniform(new Vector3())],
         ["uHoverRadius", new Uniform(0.1)],
@@ -1301,6 +1383,14 @@ export class EthDitherEffect extends Effect {
 
       for (let index = 0; index < ETH_FINGERPRINT_SAMPLES; index += 1) {
         fingerprint[index] = params.fingerprint[index] ?? 0.5;
+      }
+    }
+    this.uniforms.get("uInnovationOn")!.value = params.innovation ? 1 : 0;
+    if (params.innovation) {
+      const innovation = this.uniforms.get("uInnovation")!.value as Float32Array;
+
+      for (let index = 0; index < ETH_FINGERPRINT_SAMPLES; index += 1) {
+        innovation[index] = params.innovation[index] ?? 0.5;
       }
     }
     this.updateTypography(params);

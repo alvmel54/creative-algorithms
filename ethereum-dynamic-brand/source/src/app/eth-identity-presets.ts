@@ -6,7 +6,7 @@ import { resolveEthColor } from "./eth-diamond-shading";
  * Ecosystem identity presets (blueprint 2026-10-07, narrowed by the
  * 2026-10-09 narrative model, realigned 2026-10-12): one diamond, five
  * identities. An identity sets its look (shape, palette plus the milestone
- * Accent, density) and its own data, the heartbeat of its part of the
+ * Accent and the outline in its Color B, density) and its own data, the heartbeat of its part of the
  * ecosystem: Foundation Mix, Blockchain Total Staking, ETH the ETH price,
  * Developers gas, dApps TVL. Changing Type of data by hand keeps the
  * identity (only the look decides Custom), so any identity can still tell
@@ -33,6 +33,8 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
       "geometry.shapeType": "circle",
       "geometry.colorA": "#7c5cff",
       "geometry.colorB": "#b9a8ff",
+      // The outline takes Color B (narrative v2, 2026-11-16).
+      "geometry.outlineColor": "#b9a8ff",
       "geometry.accentColor": "#d9b04e",
       "geometry.colorGradient": false,
       // 9 (was 7): its thin rings vanished on the darker lower facets.
@@ -52,6 +54,8 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
       "geometry.shapeType": "square",
       "geometry.colorA": "#2f5bff",
       "geometry.colorB": "#3fe0ff",
+      // The outline takes Color B (narrative v2, 2026-11-16).
+      "geometry.outlineColor": "#3fe0ff",
       "geometry.accentColor": "#ff9f43",
       "geometry.colorGradient": false,
       "geometry.size": 4,
@@ -70,6 +74,8 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
       "geometry.shapeType": "diamond",
       "geometry.colorA": "#627eea",
       "geometry.colorB": "#8f7bff",
+      // The outline takes Color B (narrative v2, 2026-11-16).
+      "geometry.outlineColor": "#8f7bff",
       "geometry.accentColor": "#ff5fa2",
       "geometry.colorGradient": true,
       "geometry.size": 7,
@@ -88,6 +94,8 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
       "geometry.shapeType": "cross",
       "geometry.colorA": "#00c2ff",
       "geometry.colorB": "#5ff2b0",
+      // The outline takes Color B (narrative v2, 2026-11-16).
+      "geometry.outlineColor": "#5ff2b0",
       "geometry.accentColor": "#a3cb4d",
       "geometry.colorGradient": false,
       "geometry.size": 9,
@@ -106,6 +114,8 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
       "geometry.shapeType": "mixed",
       "geometry.colorA": "#ff4fb8",
       "geometry.colorB": "#ff9a3c",
+      // The outline takes Color B (narrative v2, 2026-11-16).
+      "geometry.outlineColor": "#ff9a3c",
       "geometry.accentColor": "#6af0ff",
       "geometry.colorGradient": true,
       "geometry.size": 6,
@@ -120,7 +130,12 @@ export const ethIdentityPresets: readonly EthIdentityPreset[] = [
 export const ethIdentityCustomValue = "custom";
 
 function sameIngredient(target: string, current: unknown, expected: string | number | boolean): boolean {
-  if (target === "geometry.colorA" || target === "geometry.colorB" || target === "geometry.accentColor") {
+  if (
+    target === "geometry.colorA" ||
+    target === "geometry.colorB" ||
+    target === "geometry.accentColor" ||
+    target === "geometry.outlineColor"
+  ) {
     return resolveEthColor(current, "").toLowerCase() === String(expected).toLowerCase();
   }
 

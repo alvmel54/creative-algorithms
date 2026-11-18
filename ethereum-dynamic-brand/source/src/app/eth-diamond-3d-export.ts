@@ -24,7 +24,7 @@ import {
   hideEthDecorativeMeshes,
   renderEthOutlineOverlay,
 } from "./eth-diamond-3d-outline";
-import { ethLiveCameraHandle, type EthDiamond3dRenderState } from "./eth-diamond-3d-shared";
+import { ethLiveCameraHandle, ethMeshAngleDeg, type EthDiamond3dRenderState } from "./eth-diamond-3d-shared";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/ethereum-holo.glb`;
 
@@ -176,7 +176,7 @@ export function createEthDiamond3dExportSession(
       });
     },
     renderFrame: (renderState) => {
-      modelClone.rotation.y = (renderState.meshRotationDeg * Math.PI) / 180;
+      modelClone.rotation.y = (ethMeshAngleDeg(renderState) * Math.PI) / 180;
       // Hidden, the gem covers no pixel and leaves no silhouette hull, so the
       // shader draws no marks, glass or shadow; the outline edges hide with it.
       modelClone.visible = renderState.includeMark ?? true;
@@ -219,6 +219,7 @@ export function createEthDiamond3dExportSession(
           fieldStrength: renderState.fieldStrength,
           fieldDensity: renderState.fieldDensity,
           fingerprint: renderState.fingerprint,
+          innovation: renderState.innovation,
           flow: renderState.flow,
           height,
           includeBackground: renderState.includeBackground,

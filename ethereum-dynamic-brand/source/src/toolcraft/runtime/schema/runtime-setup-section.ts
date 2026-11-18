@@ -187,7 +187,7 @@ function createRenderScaleControl(
 function createTimelineExtendedControl(
   timeline: ResolvedToolcraftTimelinePanelSchema | undefined,
 ): ToolcraftControlSchema | undefined {
-  if (!timeline?.enabled) {
+  if (!timeline?.enabled || timeline.extendedToggle === false) {
     return undefined;
   }
 

@@ -6,10 +6,9 @@ export const appSchema = defineToolcraft({
   canvas: {
     draggable: false,
     enabled: true,
-    // 1 = the native output size (1920x1080). 2 supersampled the preview and
-    // held 2D at about 9 fps (4 with a Story); exports keep their own
-    // Resolution, and the slider still allows 2.
-    renderScale: { defaultValue: 1, max: 2, min: 1, step: 0.25 },
+    // No Resolution scale control (Mel, 2026-11-18): the preview draws at the
+    // native output size (1920x1080 at the screen's pixel ratio) and exports
+    // keep their own Resolution.
     size: { height: 1080, unit: "px", width: 1920 },
     sizing: { mode: "editable-output" },
     upload: false,
@@ -25,7 +24,7 @@ export const appSchema = defineToolcraft({
             dataSourceIdentity: {
               defaultValue: "custom",
               description:
-                "Ecosystem identity: Foundation, Blockchain, ETH, Developers or dApps each set the look (shape, palette, milestone accent and density) and their own data (Type of data). Changing the look by hand shows Custom; changing the data keeps the identity. Shuffle below reshuffles the mark's pattern.",
+                "Ecosystem identity: Foundation, Blockchain, ETH, Developers or dApps each set the look (shape, palette, milestone accent and density) and their own data (Type of data). Changing the look by hand shows Custom; changing the data keeps the identity. Marks > Shuffle reshuffles the mark's pattern.",
               label: false,
               orderRole: "mode",
               performanceReason: "An identity sets several geometry controls at once, which rebuilds the dithering grid.",
@@ -34,16 +33,6 @@ export const appSchema = defineToolcraft({
               // this target only anchors the control in the schema.
               target: "dataSource.identity",
               type: "identityPreset",
-            },
-            dataSourceActions: {
-              actions: [{ label: "Shuffle", value: "shuffle" }],
-              defaultValue: "shuffle",
-              label: "Pattern seed",
-              orderRole: "action",
-              performanceReason: "Shuffle recomputes the deterministic seed and dithering grid.",
-              performanceRole: "responsiveness",
-              target: "dataSource.actions",
-              type: "actions",
             },
           },
           title: "Identity",
@@ -113,6 +102,18 @@ export const appSchema = defineToolcraft({
               type: "slider",
               unit: "%",
               visibleWhen: { notOneOf: ["off"], target: "dataSource.period" },
+            },
+            dataSourceInnovation: {
+              defaultValue: true,
+              description:
+                "Innovation layer: each upgrade of this data (London, The Merge, Dencun...) adds Color B to the diamond from its date upward, more when the upgrade moved the data more. The base (the first day) is mostly Color A and the tip shows how much the upgrades transformed this part of the ecosystem. Off: an even split of Color A and Color B.",
+              label: "Innovation",
+              orderRole: "detail",
+              performanceReason: "Only changes which marks take Color B in the shader; the marks drawn are the same.",
+              performanceRole: "responsiveness",
+              target: "dataSource.innovation",
+              type: "switch",
+              visibleWhen: { notOneOf: ["none"], target: "dataSource.type" },
             },
             physicsTransition: {
               defaultValue: "dissolve",
@@ -239,13 +240,15 @@ export const appSchema = defineToolcraft({
               performanceRole: "responsiveness",
               sliderValueKind: "continuous",
               step: 1,
+              semanticGroup: "diamond",
               target: "geometry.modelZoom",
               type: "slider",
               unit: "%",
             },
             geometryMeshRotation: {
               defaultValue: 0,
-              description: "Turns the 3D diamond around its vertical axis; facet lighting updates as it turns.",
+              description:
+                "The diamond's angle around its vertical axis, and where its Spin starts; facet lighting updates as it turns.",
               label: "Diamond rotation",
               max: 360,
               min: 0,
@@ -253,9 +256,23 @@ export const appSchema = defineToolcraft({
               performanceRole: "responsiveness",
               sliderValueKind: "continuous",
               step: 1,
+              semanticGroup: "diamond",
               target: "geometry.meshRotation",
               type: "slider",
               unit: "°",
+            },
+            geometrySpin: {
+              defaultValue: true,
+              description:
+                "The present: the diamond turns with the data's last 30 days, against how much this data usually moves in a month. Rising turns it to the right, falling to the left; steady turns it slowest (1 turn per loop) and a bigger move faster (2, 3 or 4 turns per loop). Off: it stays at Diamond rotation.",
+              label: "Spin",
+              orderRole: "mode",
+              performanceReason: "Spin only turns the 3D model once per frame; the dither grid and pass count are unchanged.",
+              performanceRole: "responsiveness",
+              semanticGroup: "diamond",
+              target: "geometry.spin",
+              type: "switch",
+              visibleWhen: { notOneOf: ["none"], target: "dataSource.type" },
             },
             physicsViewActions: {
               actions: [{ label: "Center view", value: "center-view" }],
@@ -265,6 +282,7 @@ export const appSchema = defineToolcraft({
               orderRole: "action",
               performanceReason: "Center view only moves the camera back to the front; the dither pipeline is unchanged.",
               performanceRole: "responsiveness",
+              semanticGroup: "diamond",
               target: "physics.viewActions",
               type: "actions",
             },
@@ -276,23 +294,27 @@ export const appSchema = defineToolcraft({
               orderRole: "mode",
               performanceReason: "Off skips the diamond's mark grid in the shader; nothing else changes.",
               performanceRole: "responsiveness",
+              semanticGroup: "diamond",
               target: "geometry.showMarks",
               type: "switch",
             },
             geometryShowOutline: {
               defaultValue: true,
-              description: "The white line along the diamond's facet edges.",
+              description: "The line along the diamond's facet edges, in the identity's Color B.",
               label: "Outline",
               orderRole: "detail",
               performanceRole: "responsiveness",
+              semanticGroup: "diamond",
               target: "geometry.showOutline",
               type: "switch",
             },
             geometryOutlineColor: {
-              defaultValue: "#ffffff",
+              defaultValue: "#b9a8ff",
+              description: "Each identity sets it to its Color B; changing it by hand shows Custom.",
               label: "Outline color",
               orderRole: "color",
               performanceRole: "responsiveness",
+              semanticGroup: "diamond",
               target: "geometry.outlineColor",
               type: "color",
               visibleWhen: { equals: true, target: "geometry.showOutline" },
@@ -307,6 +329,7 @@ export const appSchema = defineToolcraft({
               performanceRole: "responsiveness",
               sliderValueKind: "continuous",
               step: 0.25,
+              semanticGroup: "diamond",
               target: "geometry.outlineWidth",
               type: "slider",
               unit: "px",
@@ -444,6 +467,7 @@ export const appSchema = defineToolcraft({
         {
           controls: {
             geometryShapeType: {
+              semanticGroup: "marks",
               defaultValue: "circle",
               items: ethShapePickerItems,
               label: "Shape",
@@ -455,6 +479,7 @@ export const appSchema = defineToolcraft({
               type: "imagePicker",
             },
             geometrySize: {
+              semanticGroup: "marks",
               defaultValue: 9,
               label: "Size",
               max: 20,
@@ -470,6 +495,7 @@ export const appSchema = defineToolcraft({
               unit: "px",
             },
             geometrySizeVariation: {
+              semanticGroup: "marks",
               defaultValue: 15,
               description: "Randomly varies each mark's size around its base size.",
               label: "Size variation",
@@ -485,6 +511,7 @@ export const appSchema = defineToolcraft({
               unit: "%",
             },
             geometryAmount: {
+              semanticGroup: "marks",
               defaultValue: 180,
               description: "How many marks cover the diamond. Higher means a finer grid.",
               label: "Amount",
@@ -500,6 +527,7 @@ export const appSchema = defineToolcraft({
               type: "slider",
             },
             geometrySpacing: {
+              semanticGroup: "marks",
               defaultValue: 22,
               description: "Base distance between marks before Amount refines the grid.",
               label: "Spacing",
@@ -515,6 +543,7 @@ export const appSchema = defineToolcraft({
               unit: "px",
             },
             geometryRotation: {
+              semanticGroup: "marks",
               defaultValue: 0,
               description: "Turns each mark in place. In 2D it also moves the simulated light.",
               label: "Mark rotation",
@@ -529,6 +558,7 @@ export const appSchema = defineToolcraft({
               unit: "°",
             },
             geometryPatternAngle: {
+              semanticGroup: "marks",
               defaultValue: 0,
               description: "Turns the whole pattern grid, in the diamond and in the Field background; in the diamond the marks turn with it.",
               label: "Pattern angle",
@@ -542,6 +572,18 @@ export const appSchema = defineToolcraft({
               target: "geometry.patternAngle",
               type: "slider",
               unit: "°",
+            },
+            geometryShuffle: {
+              semanticGroup: "marks",
+              actions: [{ label: "Shuffle", value: "shuffle" }],
+              defaultValue: "shuffle",
+              description: "Re-deals the pattern: every mark's grid offset, jitter, per-facet rotation, Color B pick and Mixed shape, in the diamond and the Field. The data and the motion are unchanged.",
+              label: "Pattern seed",
+              orderRole: "action",
+              performanceReason: "Shuffle recomputes the deterministic seed and dithering grid.",
+              performanceRole: "responsiveness",
+              target: "geometry.actions",
+              type: "actions",
             },
           },
           title: "Marks",
@@ -641,7 +683,7 @@ export const appSchema = defineToolcraft({
             sceneBackgroundStyle: {
               defaultValue: "field",
               description:
-                "Field continues the mark's pattern around the diamond, following the same flow, in the same colors (Color A/B or the Color gradient), driven by the same Intensity, Speed and data.",
+                "Field continues the mark's pattern around the diamond, in the same colors (Color A/B or the Color gradient), and moves the same way: the diamond's Motion > Animation style, Intensity, Speed and data, in the same phase (Drift scrolls down, Pulse breathes out from the gem, Wave climbs, Shimmer flickers, Ripple rings, Flow travels the streams).",
               label: "Pattern",
               options: [
                 { label: "None", value: "solid" },
@@ -852,6 +894,9 @@ export const appSchema = defineToolcraft({
     timeline: {
       defaultDurationSeconds: 30,
       enabled: true,
+      // Only the compact Play bar (Mel, 2026-11-18): no Setup > Timeline
+      // switch; Video Export > Duration sets the loop length.
+      extendedToggle: false,
       mode: "playback",
     },
   },

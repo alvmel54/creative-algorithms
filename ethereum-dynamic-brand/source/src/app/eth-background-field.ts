@@ -4,7 +4,7 @@ export function resolveEthFieldDensity(values: Record<string, unknown>): number 
   return Math.min(3, Math.max(1, Number(values["scene.fieldDensity"] ?? 200) / 100));
 }
 
-/** Field strength 0..1 from the Background controls; 0 for Solid. */
+/** Field strength 0..1 from the Background controls; 0 for None (Solid). */
 export function resolveEthFieldStrength(values: Record<string, unknown>): number {
   if (values["scene.backgroundStyle"] !== "field") {
     return 0;

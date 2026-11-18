@@ -165,7 +165,7 @@ export function isEthStoryOn(values: Record<string, unknown>): boolean {
   return isEthLiveDataOn(values) && ["all", "10y", "5y", "merge", "1y"].includes(String(period));
 }
 
-function getPeriodRange(period: Exclude<EthDataPeriod, "recent">, type: EthDataKind): { end: number; start: number } {
+export function getPeriodRange(period: Exclude<EthDataPeriod, "recent">, type: EthDataKind): { end: number; start: number } {
   const years = STORY_YEARS[period];
   // A data that began later than the window starts at its own beginning.
   const start = years
@@ -922,8 +922,13 @@ function clamp01(value: number): number {
  * - Typical daily move (robust: median absolute deviation of log returns,
  *   so a few extreme jumps do not dominate) sets Speed, log-scaled
  *   0.2 %/day -> 0.25, 30 %/day -> 1.75.
- * - Amplitude, ln(max / min) over the period, sets Intensity, log-scaled
- *   0.15 -> 0.3, 16 -> 1.6 (a 1.2x range up to a 10-million-fold one).
+ * - Swing sets Intensity (narrative v2, 2026-11-16): the standard deviation
+ *   of the log series around its least-squares trend, so growth is not
+ *   counted as movement. It is placed, log-scaled, between the calmest and
+ *   the wildest of the five series in the same Story window
+ *   (SWING_CALIBRATION), 0 -> 0.4, 1 -> 1.6. The old measure, ln(max / min)
+ *   over the period, gave 1.4-1.6 to every series since inception: over
+ *   eleven years all of them grew by orders of magnitude.
  * - Roughness, mean abs 2nd difference / mean abs 1st difference of the log
  *   series, sets Variation (0.7 -> 30 deg, 1.6 -> 330 deg).
  * - Character picks the style, in order:
@@ -934,12 +939,32 @@ function clamp01(value: number): number {
  *   4. oscillation (detrended zero crossings > 4 %) gives Wave;
  *   5. otherwise Fluid.
  */
-function measureEthMotion(history: readonly number[], stepDays: number): EthMotionProfile {
+/** The measures of a series that decide its motion (see measureEthMotion). */
+export type EthMotionFeatures = {
+  /** ln(max / min) over the whole period. */
+  amplitude: number;
+  /** Detrended zero crossings per sample. */
+  crossingRate: number;
+  /** Net change over total path, 0..1. */
+  efficiency: number;
+  /** Excess kurtosis of the returns. */
+  kurtosis: number;
+  /** Mean abs 2nd difference / mean abs 1st difference. */
+  roughness: number;
+  /** Standard deviation of the log series around its least-squares trend. */
+  swing: number;
+  /** Robust typical daily move (MAD of log returns, per day). */
+  typicalDaily: number;
+  /** Length of the history in years. */
+  years: number;
+};
+
+export function measureEthMotionFeatures(history: readonly number[], stepDays: number): EthMotionFeatures | null {
   const logs = history.filter((value) => value > 0).map((value) => Math.log(value));
   const returns = logs.slice(1).map((value, index) => value - logs[index]!);
 
   if (returns.length < 8) {
-    return { ...LIVE_MOTION_BASE, animation: "fluid" };
+    return null;
   }
 
   const median = (values: readonly number[]): number => {
@@ -976,6 +1001,49 @@ function measureEthMotion(history: readonly number[], stepDays: number): EthMoti
     }
   });
 
+  // Swing: spread of the log series around its least-squares trend line.
+  const middleIndex = (logs.length - 1) / 2;
+  const meanLog = logs.reduce((sum, value) => sum + value, 0) / logs.length;
+  let covariance = 0;
+  let spread = 0;
+
+  logs.forEach((value, index) => {
+    covariance += (index - middleIndex) * (value - meanLog);
+    spread += (index - middleIndex) ** 2;
+  });
+
+  const trendSlope = spread > 0 ? covariance / spread : 0;
+  const swing = Math.sqrt(
+    logs.reduce((sum, value, index) => sum + (value - (meanLog + trendSlope * (index - middleIndex))) ** 2, 0) / logs.length,
+  );
+
+  return {
+    amplitude,
+    crossingRate: crossings / logs.length,
+    efficiency,
+    kurtosis,
+    roughness,
+    swing,
+    typicalDaily,
+    years: (stepDays * returns.length) / 365.25,
+  };
+}
+
+/** Swing range of each Story window: from the calmest to the wildest of the
+ * five series (measured 2026-11-16, with a 10 % margin either side). Since
+ * inception: Total Staking 0.87 .. Gas 2.68; last 10 years 0.87 .. 2.17;
+ * last 5 years 0.30 .. 0.79; last 12 months 0.028 .. 0.555. Each window has
+ * its own range because older history is far wilder: one absolute range
+ * left every series of a window at the same Intensity. */
+export const SWING_CALIBRATION: Record<Exclude<EthDataPeriod, "recent">, { high: number; low: number }> = {
+  "10y": { high: 2.38, low: 0.78 },
+  "1y": { high: 0.61, low: 0.025 },
+  "5y": { high: 0.87, low: 0.27 },
+  all: { high: 2.95, low: 0.78 },
+};
+
+export function motionFromFeatures(features: EthMotionFeatures, period: Exclude<EthDataPeriod, "recent">): EthMotionProfile {
+  const { crossingRate, efficiency, kurtosis, roughness, swing, typicalDaily } = features;
   const animation: EthAnimationMode =
     typicalDaily > 0.1
       ? "shimmer"
@@ -985,7 +1053,7 @@ function measureEthMotion(history: readonly number[], stepDays: number): EthMoti
           : "flow"
         : kurtosis > 3
           ? "pulse"
-          : crossings / logs.length > 0.04
+          : crossingRate > 0.04
             ? "wave"
             : "fluid";
   const lerp = (from: number, to: number, t: number): number => from + (to - from) * clamp01(t);
@@ -994,10 +1062,16 @@ function measureEthMotion(history: readonly number[], stepDays: number): EthMoti
 
   return {
     animation,
-    flow: lerp(0.3, 1.6, logRatio(amplitude, 0.15, 16)),
+    flow: lerp(0.4, 1.6, logRatio(swing, SWING_CALIBRATION[period].low, SWING_CALIBRATION[period].high)),
     speed: lerp(0.25, 1.75, logRatio(typicalDaily, 0.002, 0.3)),
     variationDeg: lerp(30, 330, (roughness - 0.7) / 0.9),
   };
+}
+
+function measureEthMotion(history: readonly number[], stepDays: number, period: Exclude<EthDataPeriod, "recent">): EthMotionProfile {
+  const features = measureEthMotionFeatures(history, stepDays);
+
+  return features ? motionFromFeatures(features, period) : { ...LIVE_MOTION_BASE, animation: "fluid" };
 }
 
 class EthDataFeedStore {
@@ -1135,6 +1209,60 @@ class EthDataFeedStore {
     return Math.abs(before) > 1e-9 ? { change: (after - before) / Math.abs(before), kind } : null;
   }
 
+  /** Innovation layer (narrative v2, 2026-11-16): Color B share per height
+   * of the gem. Each upgrade of the data type is measured once, on its
+   * all-time history, so an upgrade weighs the same in every Story window;
+   * the ones before the window's first day are already in the base. Null
+   * until that history has loaded. */
+  getInnovation(type: EthDataSourceType, period: EthDataPeriod): number[] | null {
+    if (period === "recent" || type === "none") {
+      return null;
+    }
+
+    if (!this.getRawHistory(type, "all")) {
+      return null;
+    }
+
+    const { end, start } = getPeriodRange(period, type);
+    const upgrades = ETH_MILESTONES.filter(
+      (milestone) => !NOT_UPGRADES.has(milestone.id) && (type === "mix" || milestone.kinds.includes(type)),
+    ).map(
+      (milestone) => ({
+        change: this.getMilestoneImpact(milestone, type, "all")?.change ?? 0,
+        seconds: milestone.seconds,
+      }),
+    );
+
+    return buildEthInnovation(upgrades, start, end);
+  }
+
+  /** Diamond spin: always the last 30 days, whatever the Story window, on
+   * the 12-month history (about 1.4 days per sample). Null until it loads,
+   * and for simulated data: a made-up present must not turn the gem. */
+  getSpin(type: EthDataSourceType): EthSpin | null {
+    if (type === "none") {
+      return null;
+    }
+
+    // Read on every 3D frame: measured once per data version.
+    const cached = this.spinCache.get(type);
+
+    if (cached && cached.version === this.version) {
+      return cached.spin;
+    }
+
+    const raw = this.getRawHistory(type, "1y");
+    const { end, start } = getPeriodRange("1y", type);
+    const spin =
+      raw && !raw.simulated ? measureEthSpin(raw.history, (end - start) / DAY_SECONDS / (raw.history.length - 1)) : null;
+
+    this.spinCache.set(type, { spin, version: this.version });
+
+    return spin;
+  }
+
+  private spinCache = new Map<EthDataSourceType, { spin: EthSpin | null; version: number }>();
+
   private async poll(kind: EthFeedKind): Promise<void> {
     const feed = this.feeds.get(kind);
 
@@ -1176,6 +1304,15 @@ class EthDataFeedStore {
     // plus the latest value polled live: a new value fires a pulse.
     for (const kind of this.kindsFor(type)) {
       void this.loadPeriod(kind, period);
+      // The Innovation layer measures every upgrade on the all-time history,
+      // including the ones before a shorter Story window.
+      if (period !== "all") {
+        void this.loadPeriod(kind, "all");
+      }
+      // The diamond spin reads the last 30 days on the 12-month history.
+      if (period !== "1y") {
+        void this.loadPeriod(kind, "1y");
+      }
       void this.load(kind);
       this.pollTimers.push(window.setInterval(() => void this.poll(kind), liveRefreshMs[kind]));
     }
@@ -1225,7 +1362,7 @@ class EthDataFeedStore {
     }
 
     const { end, start } = getPeriodRange(period, type);
-    const profile = measureEthMotion(raw.history, (end - start) / DAY_SECONDS / (raw.history.length - 1));
+    const profile = measureEthMotion(raw.history, (end - start) / DAY_SECONDS / (raw.history.length - 1), period);
 
     this.profileCache.set(key, profile);
 
@@ -1392,7 +1529,7 @@ class EthDataFeedStore {
             return feed && !feed.simulated ? [{ kind, raw: feed.history, ...getPeriodRange(period, kind) }] : [];
           })
         : [];
-    const fingerprint = { ...buildFingerprint(raw.history, type, period), sources };
+    const fingerprint = { ...buildFingerprint(raw.history, type, period), innovation: this.getInnovation(type, period), sources };
 
     this.fingerprintCache.set(key, { fingerprint, version: this.version });
 
@@ -1405,6 +1542,10 @@ export const ETH_FINGERPRINT_SAMPLES = 64;
 
 export type EthFingerprint = {
   end: number;
+  /** Innovation layer: 0..1 share of Color B per bin, base (start) to tip
+   * (today). Null until the all-time history that measures the upgrades
+   * has loaded. */
+  innovation: number[] | null;
   /** Mix: each source's own history, read on hover. */
   sources?: { end: number; kind: EthFeedKind; raw: number[]; start: number }[];
   kind: EthDataKind;
@@ -1415,6 +1556,35 @@ export type EthFingerprint = {
   /** 0..1 level per bin, base (start) to tip (today). */
   values: number[];
 };
+
+/** Milestones that are not network upgrades, so they add no Color B:
+ * Genesis is the origin itself (the gem's base), and the spot ETFs are a
+ * market event. Their waves and letters in the Story are unchanged. */
+const NOT_UPGRADES: ReadonlySet<EthMilestoneId> = new Set(["genesis", "etfs"]);
+
+/** Innovation layer: the gem starts at this share of Color B... */
+export const INNOVATION_BASE = 0.1;
+/** ...and never goes past this one, so Color A always stays in the gem. */
+export const INNOVATION_MAX = 0.9;
+
+/** Color B one upgrade adds: 8 points, up to 20 when it moved the data by
+ * FULL_IMPACT (30 %) or more over the following IMPACT_DAYS. */
+export function ethInnovationWeight(change: number): number {
+  return 0.08 + 0.12 * Math.min(Math.abs(change) / FULL_IMPACT, 1);
+}
+
+/** Color B share at each of the ETH_FINGERPRINT_SAMPLES heights between
+ * `start` (the gem's base) and `end` (its tip): the base share plus every
+ * upgrade dated up to the middle of that bin. Steps, not a ramp: the gem
+ * shows where each upgrade happened. */
+export function buildEthInnovation(upgrades: readonly { change: number; seconds: number }[], start: number, end: number): number[] {
+  return Array.from({ length: ETH_FINGERPRINT_SAMPLES }, (_, bin) => {
+    const seconds = start + ((bin + 0.5) / ETH_FINGERPRINT_SAMPLES) * (end - start);
+    const added = upgrades.reduce((sum, upgrade) => (upgrade.seconds <= seconds ? sum + ethInnovationWeight(upgrade.change) : sum), 0);
+
+    return Math.min(INNOVATION_MAX, INNOVATION_BASE + added);
+  });
+}
 
 /** Half width, in bins, of the era each bin is compared with: about an
  * eighth of the period either side (1.4 years since inception, 1.5 months for
@@ -1456,12 +1626,97 @@ function buildFingerprint(history: readonly number[], type: EthDataKind, period:
 
   return {
     end,
+    innovation: null,
     kind: type,
     milestones: getEthMilestonesFor(type, period),
     raw: [...history],
     start,
     values,
   };
+}
+
+/** Data > Innovation (on by default): the fingerprint's Color B share per
+ * height, or null for the even split when it is off or not loaded yet. */
+export function resolveEthInnovation(values: Record<string, unknown>, fingerprint: EthFingerprint | null): number[] | null {
+  return values["dataSource.innovation"] === false ? null : (fingerprint?.innovation ?? null);
+}
+
+/** Diamond spin (blueprint 2026-11-16-ethereum-diamond-spin): the present.
+ * The change of the last 30 days (7-day averages at each end), in units of
+ * the series' own typical 30-day move (daily MAD × √30), turns the diamond:
+ * up turns it to the right, down to the left; steady turns it at the
+ * minimum speed (Mel, 2026-11-16: "prefiero giro mínimo"). */
+export const SPIN_RECENT_DAYS = 30;
+export const SPIN_AVERAGE_DAYS = 7;
+
+export type EthSpin = {
+  /** ln(average of the last 7 days / average of the 7 days ending 30 days ago). */
+  change: number;
+  /** Whole turns per timeline loop, signed (+ right, - left): 1..4. */
+  turns: number;
+  /** change / typical 30-day move. */
+  z: number;
+};
+
+/** Four steps, in whole turns per loop so the video closes without a jump:
+ * steady (|z| < 0.5) 1, the minimum (one turn per loop is the slowest that
+ * still closes it), moving 2, moving strongly (|z| ≥ 1) 3, out of the
+ * ordinary (|z| ≥ 2) 4. Steady still turns the way its small change went. */
+export function ethSpinTurns(z: number): number {
+  const size = Math.abs(z);
+  const turns = size < 0.5 ? 1 : size < 1 ? 2 : size < 2 ? 3 : 4;
+
+  return z < 0 ? -turns : turns;
+}
+
+/** The spin of a series sampled every `stepDays` (its last value is today). */
+export function measureEthSpin(history: readonly number[], stepDays: number): EthSpin | null {
+  const features = measureEthMotionFeatures(history, stepDays);
+
+  if (!features || !(features.typicalDaily > 0)) {
+    return null;
+  }
+
+  const count = Math.max(1, Math.round(SPIN_AVERAGE_DAYS / stepDays));
+  const average = (daysAgo: number): number => {
+    const last = history.length - 1 - Math.round(daysAgo / stepDays);
+    const first = last - count + 1;
+
+    if (first < 0) {
+      return Number.NaN;
+    }
+
+    let total = 0;
+
+    for (let index = first; index <= last; index += 1) {
+      total += history[index]!;
+    }
+
+    return total / count;
+  };
+  const now = average(0);
+  const before = average(SPIN_RECENT_DAYS);
+
+  if (!(now > 0) || !(before > 0)) {
+    return null;
+  }
+
+  const change = Math.log(now / before);
+  const z = change / (features.typicalDaily * Math.sqrt(SPIN_RECENT_DAYS));
+
+  return { change, turns: ethSpinTurns(z), z };
+}
+
+/** Diamond > Spin (on by default): signed whole turns per loop from the
+ * data's last 30 days; 0 when off, without data, or before it loads. */
+export function resolveEthSpinTurns(values: Record<string, unknown>): number {
+  if (values["geometry.spin"] === false || resolveEthPeriod(values) === "recent") {
+    return 0;
+  }
+
+  const type = (values["dataSource.type"] as EthDataSourceType) ?? "mix";
+
+  return ethDataFeed.getSpin(type)?.turns ?? 0;
 }
 
 export type EthFingerprintReading = {

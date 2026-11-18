@@ -25,7 +25,7 @@ import {
   renderEthOutlineOverlay,
   type EthOutlineStyle,
 } from "./eth-diamond-3d-outline";
-import { ethLiveCameraHandle, type EthDiamond3dRenderState, type EthFrameSource } from "./eth-diamond-3d-shared";
+import { ethLiveCameraHandle, ethMeshAngleDeg, type EthDiamond3dRenderState, type EthFrameSource } from "./eth-diamond-3d-shared";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/ethereum-holo.glb`;
 
@@ -75,6 +75,7 @@ function toDitherEffectParams(renderState: EthDiamond3dRenderState, width: numbe
     fieldStrength: renderState.fieldStrength,
     fieldDensity: renderState.fieldDensity,
     fingerprint: renderState.fingerprint,
+    innovation: renderState.innovation,
     flow: renderState.flow,
     height,
     includeBackground: renderState.includeBackground,
@@ -104,28 +105,52 @@ function EthDitherFrameUpdate({
   cssHeight,
   cssWidth,
   effect,
-  frameSourceRef,
-  renderState,
+  frameStateRef,
 }: {
   cssHeight: number;
   cssWidth: number;
   effect: EthDitherEffect;
-  frameSourceRef?: React.RefObject<EthFrameSource | null>;
-  renderState: EthDiamond3dRenderState;
+  frameStateRef: React.RefObject<EthDiamond3dRenderState>;
 }): null {
-  const latestRef = React.useRef({ cssHeight, cssWidth, renderState });
+  const latestRef = React.useRef({ cssHeight, cssWidth });
 
-  latestRef.current = { cssHeight, cssWidth, renderState };
+  latestRef.current = { cssHeight, cssWidth };
 
   useFrame(() => {
     const latest = latestRef.current;
-    const frameState = frameSourceRef?.current?.stateAt(performance.now()) ?? latest.renderState;
 
-    effect.updateParams(toDitherEffectParams(frameState, latest.cssWidth, latest.cssHeight));
+    effect.updateParams(toDitherEffectParams(frameStateRef.current, latest.cssWidth, latest.cssHeight));
   }, 0.5);
 
   return null;
 }
+
+/** The state of this frame, read once (priority -0.75: after OrbitControls,
+ * before the diamond turns and the facet passes): from the frame source at
+ * this frame's time, or the committed state without one. The diamond's
+ * spin and the dither effect both read it. */
+function EthFrameStateTick({
+  frameSourceRef,
+  frameStateRef,
+  renderState,
+}: {
+  frameSourceRef?: React.RefObject<EthFrameSource | null>;
+  frameStateRef: React.RefObject<EthDiamond3dRenderState>;
+  renderState: EthDiamond3dRenderState;
+}): null {
+  const latestRef = React.useRef(renderState);
+
+  latestRef.current = renderState;
+
+  useFrame(() => {
+    frameStateRef.current = frameSourceRef?.current?.stateAt(performance.now()) ?? latestRef.current;
+  }, -0.75);
+
+  return null;
+}
+
+/** How fast the diamond glides back to the spin after a hover hold (1/s). */
+const SPIN_CATCH_UP_RATE = 6;
 
 export type EthCameraFit = {
   center: THREE.Vector3;
@@ -225,7 +250,8 @@ function getEthHoverHit(event: ThreeEvent<PointerEvent>): EthHoverHit | null {
 function EthDiamondModel({
   cssHeight,
   cssWidth,
-  meshRotationDeg,
+  frameStateRef,
+  gemHeldRef,
   onFit,
   onHover,
   outlineStyle,
@@ -233,7 +259,10 @@ function EthDiamondModel({
 }: {
   cssHeight: number;
   cssWidth: number;
-  meshRotationDeg: number;
+  /** This frame's state: Diamond rotation plus the data spin. */
+  frameStateRef: React.RefObject<EthDiamond3dRenderState>;
+  /** True while the pointer reads the gem (fingerprint hover). */
+  gemHeldRef: React.RefObject<boolean>;
   onFit: (fit: EthCameraFit) => void;
   /** Data fingerprint hover; undefined turns it off. */
   onHover?: (hover: EthHoverHit | null) => void;
@@ -260,6 +289,41 @@ function EthDiamondModel({
     // unnecessary and would fight a user actively dragging the slider.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, camera]);
+
+  // Diamond spin (2026-11-16): the angle of this frame's loop time. Reading
+  // the fingerprint holds it still; on release it glides back to the spin
+  // instead of jumping. Priority -0.6: before the model frame sync below.
+  const angleRef = React.useRef<number | null>(null);
+  const catchingUpRef = React.useRef(false);
+
+  useFrame((_, delta) => {
+    const group = groupRef.current;
+
+    if (!group) {
+      return;
+    }
+
+    if (gemHeldRef.current && angleRef.current !== null) {
+      catchingUpRef.current = true;
+      return;
+    }
+
+    const target = ethMeshAngleDeg(frameStateRef.current);
+    let angle = target;
+
+    if (catchingUpRef.current && angleRef.current !== null) {
+      const gap = ((((target - angleRef.current) % 360) + 540) % 360) - 180;
+
+      if (Math.abs(gap) > 0.2) {
+        angle = angleRef.current + gap * (1 - Math.exp(-delta * SPIN_CATCH_UP_RATE));
+      } else {
+        catchingUpRef.current = false;
+      }
+    }
+
+    angleRef.current = angle;
+    group.rotation.y = (angle * Math.PI) / 180;
+  }, -0.6);
 
   // Before the facet passes (priority 0): they and the dither effect read
   // the model frame (Shape rotation, bounds, camera distance, the Glass
@@ -292,7 +356,6 @@ function EthDiamondModel({
       }
       onPointerOut={onHover ? () => onHover(null) : undefined}
       ref={groupRef}
-      rotation={[0, (meshRotationDeg * Math.PI) / 180, 0]}
     >
       <primitive object={scene} />
     </group>
@@ -465,9 +528,12 @@ function EthDiamondSceneContents({
 }): React.JSX.Element {
   const { camera } = useThree();
   const effectRef = React.useRef<EthDitherEffect | null>(null);
+  const frameStateRef = React.useRef<EthDiamond3dRenderState>(renderState);
+  const gemHeldRef = React.useRef(false);
   // Data fingerprint hover: the shader lights the band, the tooltip reads
   // the store. Straight to the effect's uniforms, no React render.
   const handleHover = React.useCallback((hover: EthHoverHit | null) => {
+    gemHeldRef.current = hover !== null;
     const min = ethModelFrameUniforms.uBoundsMin.value as THREE.Vector3;
     const max = ethModelFrameUniforms.uBoundsMax.value as THREE.Vector3;
 
@@ -611,11 +677,13 @@ function EthDiamondSceneContents({
         position={[3.2, 4.2, 5]}
       />
       <directionalLight color="#7c5cff" intensity={0.4} position={[-3, -2, -4]} />
+      <EthFrameStateTick frameSourceRef={frameSourceRef} frameStateRef={frameStateRef} renderState={renderState} />
       <React.Suspense fallback={null}>
         <EthDiamondModel
           cssHeight={cssHeight}
           cssWidth={cssWidth}
-          meshRotationDeg={renderState.meshRotationDeg}
+          frameStateRef={frameStateRef}
+          gemHeldRef={gemHeldRef}
           onFit={handleModelFit}
           onHover={hoverEnabled ? handleHover : undefined}
           outlineStyle={outlineStyle}
@@ -630,8 +698,7 @@ function EthDiamondSceneContents({
             cssHeight={cssHeight}
             cssWidth={cssWidth}
             effect={ditherEffect}
-            frameSourceRef={frameSourceRef}
-            renderState={renderState}
+            frameStateRef={frameStateRef}
           />
           <EffectComposer autoClear multisampling={0}>
             {ditherEffectElement}

@@ -135,6 +135,7 @@ export function resolveToolcraftTimelinePanel(
     return {
       defaultDurationSeconds: toolcraftTimelineDefaultDurationSeconds,
       enabled: true,
+      extendedToggle: true,
       mode: "keyframes",
     };
   }
@@ -148,6 +149,7 @@ export function resolveToolcraftTimelinePanel(
       timeline.defaultDurationSeconds,
     ),
     enabled: true,
+    extendedToggle: timeline.extendedToggle !== false,
     mode: timeline.mode ?? "keyframes",
   };
 }

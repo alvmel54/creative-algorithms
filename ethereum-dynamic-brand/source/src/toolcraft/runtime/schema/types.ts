@@ -184,12 +184,16 @@ export type ToolcraftTimelinePanelSchema =
   | {
       defaultDurationSeconds?: number;
       enabled?: boolean;
+      /** false hides the Setup > Timeline switch (the compact Play bar stays). */
+      extendedToggle?: boolean;
       mode?: ToolcraftTimelineMode;
     };
 
 export type ResolvedToolcraftTimelinePanelSchema = {
   defaultDurationSeconds: number;
   enabled: boolean;
+  /** false hides the Setup > Timeline switch; undefined counts as true. */
+  extendedToggle?: boolean;
   mode: ToolcraftTimelineMode;
 };
 

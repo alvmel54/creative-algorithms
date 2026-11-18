@@ -30,11 +30,19 @@ export type EthDiamond3dRenderState = {
   fieldDensity: number;
   /** Data fingerprint, base to tip (see EthFingerprint), or null. */
   fingerprint: readonly number[] | null;
+  /** Innovation layer: Color B share per height, base to tip, or null for
+   * the even colorBShare split (Innovation off, or no history yet). */
+  innovation: readonly number[] | null;
   flow: number;
   includeBackground: boolean;
   loopProgress: number;
   maxSize: number;
+  /** Diamond rotation: the spin's starting angle. */
   meshRotationDeg: number;
+  /** Diamond spin: signed whole turns per timeline loop (+ right, - left),
+   * 1..4; 0 with Spin off or before the data loads. Whole turns close the
+   * loop without a jump. */
+  spinTurns: number;
   /** Camera zoom (1 = fitted framing); the background is unaffected. */
   modelZoom: number;
   /** Active milestone wave (history periods), or null. */
@@ -78,3 +86,9 @@ export type EthFrameSource = {
  * its pose so the PNG/video show the same angle as the preview, including an
  * Interactive rotation drag, instead of re-fitting a front view. */
 export const ethLiveCameraHandle: { current: Camera | null } = { current: null };
+
+/** The diamond's angle around its vertical axis at this state's loop time:
+ * the Diamond rotation slider plus the data spin (whole turns per loop). */
+export function ethMeshAngleDeg(state: Pick<EthDiamond3dRenderState, "loopProgress" | "meshRotationDeg" | "spinTurns">): number {
+  return state.meshRotationDeg + state.spinTurns * 360 * state.loopProgress;
+}
